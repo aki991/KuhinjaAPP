@@ -8,6 +8,7 @@ import {
 import { createPortal } from "react-dom";
 import { X, Check, ArrowUpRight, type LucideIcon } from "lucide-react";
 import type { KitchenElement } from "../core/types";
+import { templates } from "../core/catalog";
 export const money = (n: number) =>
   new Intl.NumberFormat("sr-Latn-RS", {
     minimumFractionDigits: 0,
@@ -116,10 +117,14 @@ export function Cabinet({
   kind?: KitchenElement["kind"];
   size?: number;
 }) {
-  const drawer = kind.startsWith("drawer"),
-    wall = ["wall1", "wall2", "open", "lift"].includes(kind),
-    tall = ["tall", "fridge", "tallOven"].includes(kind),
-    panel = ["side", "panel", "plinth", "worktop"].includes(kind);
+  const template = templates.find((t) => t.kind === kind),
+    drawer = !!template?.drawers,
+    wall = template?.group === "Gornji",
+    tall = template?.group === "Visoki",
+    panel = ["side", "panel", "plinth", "worktop", "filler", "bar"].includes(kind),
+    appliance = template?.visual?.appliance ||
+      (["fridge", "freeFridge", "tallFreezer"].includes(kind) ? "fridge" :
+        ["oven", "tallOven", "freeStove"].includes(kind) ? "oven" : "none");
   return (
     <svg
       width={size}
@@ -163,7 +168,7 @@ export function Cabinet({
                 />
               ))}
             </>
-          ) : kind === "oven" ? (
+          ) : appliance === "oven" || appliance === "dishwasher" ? (
             <>
               <rect
                 x="16"
@@ -175,7 +180,7 @@ export function Cabinet({
               />
               <path d="M21 28h22" stroke="currentColor" />
             </>
-          ) : kind === "open" ? (
+          ) : ["open", "baseOpen"].includes(kind) ? (
             <path d="M10 27h44M10 36h44" stroke="currentColor" />
           ) : (
             <>
@@ -187,6 +192,9 @@ export function Cabinet({
               />
             </>
           )}
+          {appliance === "fridge" && <path d="M17 29h30M42 15v7m0 12v7" stroke="currentColor" strokeWidth="1.4" />}
+          {["baseCargo", "tallCargo"].includes(kind) && <path d="M23 27h18M23 35h18M23 43h18" stroke="currentColor" strokeWidth="1.3" />}
+          {["corner", "cornerBlind", "wallCorner"].includes(kind) && <path d="M9 52h19V34h26" stroke="currentColor" strokeWidth="1.6" fill="none" />}
           {!wall && (
             <path
               d={tall ? "M21 56v4m22-4v4" : "M13 52v6m38-6v6"}

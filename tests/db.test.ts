@@ -24,20 +24,65 @@ afterEach(async () => {
   for (const d of databases.splice(0)) await d.delete();
 });
 describe("Trajna lokalna baza", () => {
+  it("čuva nepotpun novi tip i format dobavljača u bazi i rezervnoj kopiji", async () => {
+    const a = database(), b = database();
+    const offer = ensureLayout(createOffer());
+    const cargo = newElement("baseCargo");
+    cargo.placement = { wall: "A", row: "base", offset: 0, order: 0 };
+    offer.elements = [cargo];
+    expect(await persistProject(offer, a)).toBe(true);
+    expect((await a.offers.get(offer.id))!.elements[0].kind).toBe("baseCargo");
+    await a.meta.put({ id: "import-format:stolar", value: { supplier: "Stolar", mapping: { Šifra: "SKU" } } });
+    await restoreBackup(JSON.parse(JSON.stringify(await exportBackup(a))), b);
+    expect((await b.offers.get(offer.id))!.elements[0].kind).toBe("baseCargo");
+    expect((await b.meta.get("import-format:stolar"))?.value).toEqual({ supplier: "Stolar", mapping: { Šifra: "SKU" } });
+  });
+  it("izgled, fotografije dekora, RAL, ručice i debljina ploče preživljavaju JSON i ponovno otvaranje", async () => {
+    const a = database(),
+      b = database(),
+      o = ensureLayout(createOffer(true));
+    o.selection = {
+      ...o.selection,
+      frontMode: "body",
+      body: "body-oak",
+      wallHandle: "handle",
+      handlePosition: "horizontal",
+      ralCode: "Test",
+      ralColor: "#223344",
+      worktopThickness: 28,
+    };
+    o.prices.find((p) => p.id === "body-oak")!.appearance = {
+      color: "#ad825c",
+      texture: "wood",
+      image:
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2ioAAAAASUVORK5CYII=",
+    };
+    const total = calculateOffer(o).total;
+    await saveOffer(o, a);
+    await restoreBackup(JSON.parse(JSON.stringify(await exportBackup(a))), b);
+    const saved = (await b.offers.get(o.id))!;
+    expect(saved.selection).toEqual(o.selection);
+    expect(saved.prices).toEqual(o.prices);
+    expect(calculateOffer(saved).total).toBe(total);
+    const invalid = await exportBackup(a);
+    invalid.offers[0].prices.find(
+      (p) => p.id === "body-oak",
+    )!.appearance!.color = "invalid";
+    await expect(restoreBackup(invalid, b)).rejects.toThrow();
+    expect((await b.offers.get(o.id))!.selection).toEqual(o.selection);
+  });
   it("v5→v6 omogućava demo Push za visoki ormar i čuva prilagođena pravila i cene", async () => {
     const name = "v5-" + crypto.randomUUID(),
       legacy = new Dexie(name);
-    legacy
-      .version(5)
-      .stores({
-        products: "id,category,supplier,code",
-        offers: "id,updatedAt",
-        suppliers: "id,name",
-        settings: "id",
-        meta: "id",
-        clients: "id,name",
-        templates: "id,version",
-      });
+    legacy.version(5).stores({
+      products: "id,category,supplier,code",
+      offers: "id,updatedAt",
+      suppliers: "id,name",
+      settings: "id",
+      meta: "id",
+      clients: "id,name",
+      templates: "id,version",
+    });
     const o = ensureLayout(createOffer(true));
     const push = o.prices.find((p) => p.id === "push")!;
     push.pushRule!.kinds = ["wall1", "wall2"];

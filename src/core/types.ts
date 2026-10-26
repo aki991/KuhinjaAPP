@@ -16,6 +16,11 @@ export type Category =
   | "other"
   | "labor";
 export type Unit = "m²" | "m" | "kom" | "komplet" | "tabla";
+export interface ProductAppearance {
+  color: string;
+  texture: "solid" | "wood" | "stone";
+  image?: string;
+}
 export interface Product {
   id: string;
   code: string;
@@ -35,6 +40,13 @@ export interface Product {
   processing?: number;
   pushRule?: PushRule;
   verticalGolaRule?: VerticalGolaRule;
+  appearance?: ProductAppearance;
+  thickness?: number;
+  width?: number;
+  height?: number;
+  depth?: number;
+  vatRate?: number;
+  discountRate?: number;
 }
 export interface KitComponent {
   product: string;
@@ -99,6 +111,12 @@ export interface Selection {
   tallHinge?: string;
   tallPush?: string;
   verticalGola?: string;
+  frontMode?: "separate" | "body" | "ral";
+  ralColor?: string;
+  ralCode?: string;
+  wallHandle?: string;
+  handlePosition?: "vertical" | "horizontal" | "center";
+  worktopThickness?: number;
 }
 export type SelectionProductKey =
   | "body"
@@ -134,7 +152,17 @@ export type ElementKind =
   | "side"
   | "plinth"
   | "panel"
-  | "island";
+  | "island"
+  | LibraryKind;
+export type LibraryKind =
+  | "base1Right" | "drawer2Door" | "drawer3Door" | "sinkOne"
+  | "dishwasherBuilt" | "cornerBlind" | "baseOpen" | "baseCargo"
+  | "wall1Right" | "liftDouble" | "liftFolding" | "wallGlass1"
+  | "wallGlass2" | "wallHood" | "wallCorner" | "wallBridgeFridge"
+  | "wallBridgeOven" | "tallOne" | "tallDrawer" | "tallFreezer"
+  | "tallOvenMicrowave" | "tallCargo" | "tallPantry" | "tallCombined"
+  | "islandDrawer" | "islandBack" | "bar" | "filler"
+  | "freeFridge" | "freeStove" | "freeDishwasher";
 export type LayoutRow = "base" | "wall" | "tall" | "extra";
 export type LayoutLane = "base" | "wall" | "extra";
 export interface Placement {

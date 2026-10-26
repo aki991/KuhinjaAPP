@@ -1,6 +1,7 @@
 import type {
   Category,
   ElementKind,
+  ElementVisual,
   KitchenElement,
   Product,
   Selection,
@@ -163,8 +164,10 @@ export interface Template {
   shelves: number;
   rule: string;
   unsupported?: boolean;
+  constructionKind?: ElementKind;
+  visual?: ElementVisual;
 }
-export const templates: Template[] = [
+const legacyTemplates: Template[] = [
   {
     kind: "base1",
     name: "Donji sa jednim vratima",
@@ -383,6 +386,84 @@ export const templates: Template[] = [
     rule: "Jednostavan samostalan pravougaoni element sa dvoja vrata i punim korpusnim leđima. Radna ploča dodaje se posebno.",
   },
 ];
+const derived = (
+  kind: ElementKind,
+  name: string,
+  group: string,
+  source: ElementKind,
+  options: Partial<Template> = {},
+): Template => {
+  const parent = legacyTemplates.find((t) => t.kind === source)!;
+  return {
+    ...parent,
+    ...options,
+    kind,
+    name,
+    group,
+    constructionKind: options.unsupported ? undefined : source,
+    rule: options.unsupported
+      ? "Za ovaj tip nije definisano provereno konstrukciono pravilo. Precizan obračun nije dostupan."
+      : parent.rule,
+  };
+};
+const newTemplates: Template[] = [
+  derived("base1Right", "Jedna vrata — desno", "Donji", "base1", { visual: { hinge: "right" } }),
+  derived("drawer2Door", "Fiokar — 2 fioke + vrata", "Donji", "drawer2", { doors: 1, unsupported: true }),
+  derived("drawer3Door", "Fiokar — 3 fioke + vrata", "Donji", "drawer3", { doors: 1, unsupported: true }),
+  derived("sinkOne", "Sudopera — jedna vrata", "Donji", "sink", { width: 600, doors: 1, visual: { appliance: "sink" } }),
+  derived("dishwasherBuilt", "Ugradna mašina za sudove", "Donji", "oven", { visual: { appliance: "dishwasher" }, unsupported: true }),
+  derived("cornerBlind", "Ugaoni donji — slepi ugao", "Donji", "corner", { unsupported: true }),
+  derived("baseOpen", "Otvorene police", "Donji", "open", { height: 720, depth: 560, unsupported: true }),
+  derived("baseCargo", "Izvlačna korpa / cargo", "Donji", "base1", { width: 300, unsupported: true }),
+  derived("wall1Right", "Jedna vrata — desno", "Gornji", "wall1", { visual: { hinge: "right" } }),
+  derived("liftDouble", "Dva podizna fronta", "Gornji", "lift", { doors: 2, height: 720, unsupported: true }),
+  derived("liftFolding", "Harmonika podizni front", "Gornji", "lift", { doors: 2, height: 720, unsupported: true }),
+  derived("wallGlass1", "Staklena vrata — jedna", "Gornji", "wall1", { visual: { glass: true }, unsupported: true }),
+  derived("wallGlass2", "Staklena vrata — dvoja", "Gornji", "wall2", { visual: { glass: true }, unsupported: true }),
+  derived("wallHood", "Element za aspirator", "Gornji", "wall1", { visual: { appliance: "hob" }, unsupported: true }),
+  derived("wallCorner", "Ugaoni viseći", "Gornji", "wall1", { width: 900, depth: 900, unsupported: true }),
+  derived("wallBridgeFridge", "Most iznad frižidera", "Gornji", "wall2", { height: 400, shelves: 0 }),
+  derived("wallBridgeOven", "Most iznad rerne ili nape", "Gornji", "wall2", { height: 400, shelves: 0 }),
+  derived("tallOne", "Jedna vrata", "Visoki", "tall", { doors: 1 }),
+  derived("tallDrawer", "Visoki fiokar", "Visoki", "tall", { doors: 0, drawers: 5, unsupported: true }),
+  derived("tallFreezer", "Ugradni zamrzivač", "Visoki", "fridge", { visual: { appliance: "fridge" }, unsupported: true }),
+  derived("tallOvenMicrowave", "Rerna i mikrotalasna", "Visoki", "tallOven", { visual: { appliance: "oven" }, unsupported: true }),
+  derived("tallCargo", "Visoki cargo", "Visoki", "tall", { doors: 1, unsupported: true }),
+  derived("tallPantry", "Ostava sa policama", "Visoki", "tall", { doors: 2, shelves: 5 }),
+  derived("tallCombined", "Kombinovani ormar", "Visoki", "tall", { unsupported: true }),
+  derived("islandDrawer", "Ostrvski fiokar", "Ostrvski", "island", { doors: 0, drawers: 3, unsupported: true }),
+  derived("islandBack", "Ostrvski element sa zadnjom oblogom", "Ostrvski", "island", { unsupported: true }),
+  derived("bar", "Šank / produžetak radne ploče", "Ostrvski", "worktop", { width: 1200, depth: 600, unsupported: true }),
+  derived("filler", "Blenda / maska", "Dodatni", "panel", { width: 100 }),
+  derived("freeFridge", "Samostojeći frižider", "Dodatni", "fridge", { visual: { appliance: "fridge" }, unsupported: true }),
+  derived("freeStove", "Samostojeći šporet", "Dodatni", "oven", { visual: { appliance: "oven" }, unsupported: true }),
+  derived("freeDishwasher", "Samostojeća mašina za sudove", "Dodatni", "oven", { visual: { appliance: "dishwasher" }, unsupported: true }),
+];
+export const templates: Template[] = [...legacyTemplates, ...newTemplates];
+export const libraryGroups = ["Donji", "Viseći", "Visoki", "Ostrvski", "Dodaci"] as const;
+const libraryKinds: Record<(typeof libraryGroups)[number], ElementKind[]> = {
+  Donji: ["base1", "base1Right", "base2", "drawer2", "drawer3", "drawer4", "drawer2Door", "drawer3Door", "sinkOne", "sink", "oven", "dishwasherBuilt", "corner", "cornerBlind", "baseOpen", "baseCargo"],
+  Viseći: ["wall1", "wall1Right", "wall2", "lift", "liftDouble", "liftFolding", "wallGlass1", "wallGlass2", "open", "wallHood", "wallCorner", "wallBridgeFridge", "wallBridgeOven"],
+  Visoki: ["tallOne", "tall", "tallDrawer", "fridge", "tallFreezer", "tallOven", "tallOvenMicrowave", "tallCargo", "tallPantry", "tallCombined"],
+  Ostrvski: ["island", "islandDrawer", "islandBack", "bar"],
+  Dodaci: ["side", "plinth", "worktop", "panel", "filler", "freeFridge", "freeStove", "freeDishwasher"],
+};
+const names: Partial<Record<ElementKind, string>> = {
+  base1: "Jedna vrata — levo", base2: "Dvoja vrata",
+  drawer2: "Fiokar — 2 fioke", drawer3: "Fiokar — 3 fioke", drawer4: "Fiokar — 4 fioke",
+  sink: "Sudopera — dvoja vrata", oven: "Ugradna rerna", corner: "Ugaoni donji — L front",
+  wall1: "Jedna vrata — levo", wall2: "Dvoja vrata", lift: "Horizontalni podizni front",
+  open: "Otvorene police", tall: "Dvoja vrata", fridge: "Ugradni frižider",
+  tallOven: "Ugradna rerna", island: "Ostrvski element sa vratima",
+  side: "Završni panel", panel: "Zidna obloga", worktop: "Radna ploča", plinth: "Sokla",
+};
+export const libraryTemplates = libraryGroups.flatMap((group) =>
+  libraryKinds[group].map((kind) => ({
+    ...templates.find((t) => t.kind === kind)!,
+    name: names[kind] || templates.find((t) => t.kind === kind)!.name,
+    group,
+  })),
+);
 export function newElement(
   kind: ElementKind,
   selection = defaultSelection,
@@ -392,7 +473,8 @@ export function newElement(
     id: uid(),
     kind,
     width: t.width,
-    height: t.height,
+    height:
+      kind === "worktop" ? (selection.worktopThickness ?? t.height) : t.height,
     depth: t.depth,
     quantity: 1,
     doors: t.doors,
@@ -402,6 +484,7 @@ export function newElement(
     selection: { ...selection },
     extra: 0,
     note: "",
+    ...(t.visual ? { visual: { ...t.visual } } : {}),
   };
 }
 export function demoElements(): KitchenElement[] {

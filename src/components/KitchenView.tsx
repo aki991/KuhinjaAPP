@@ -11,7 +11,7 @@ import {
   MoreHorizontal,
   Ruler,
 } from "lucide-react";
-import { newElement, templates, uid } from "../core/catalog";
+import { libraryGroups, libraryTemplates, newElement, uid, type Template } from "../core/catalog";
 import {
   appendPlacement,
   displayProject,
@@ -34,6 +34,7 @@ import useKitchenFullscreen from "./useKitchenFullscreen";
 import ElementStrip from "./elevation/ElementStrip";
 import { elevationScene } from "../core/elevation";
 import ElevationViewport from "./elevation/ElevationViewport";
+import TopViewport from "./elevation/TopViewport";
 import WallSettingsEditor from "./elevation/WallSettingsEditor";
 import { Cabinet, Field, Modal, ModalPortalContext, number } from "./UI";
 import ElementEditor from "./ElementEditor";
@@ -70,6 +71,7 @@ export default function KitchenView({
   const host = useRef<HTMLElement>(null),
     fullscreen = useKitchenFullscreen(host);
   const [focusRequest, setFocusRequest] = useState(0);
+  const [view, setView] = useState<"front" | "top">("front");
   useEffect(() => {
     if (!fullscreen.active) setEditor(null);
   }, [fullscreen.active]);
@@ -125,6 +127,35 @@ export default function KitchenView({
     setFocusRequest((n) => n + 1);
     setDragNotice("");
   }
+  function addTemplate(t: Template, immediate: boolean) {
+    const item = newElement(t.kind, offer.selection);
+    const island = t.group === "Ostrvski";
+    const target = island ? "island" : wall.id;
+    const nextLayout = island && !layout.walls.some((w) => w.id === "island")
+      ? { ...layout, walls: [...layout.walls, { id: "island", name: "Ostrvo", length: 3000 }] }
+      : layout;
+    item.placement = appendPlacement(offer.elements, item, target, nextLayout);
+    if (immediate) {
+      const result = relocateItem(
+        [...offer.elements, item], nextLayout, item.id, target, laneOf(item),
+        Number.MAX_SAFE_INTEGER,
+      );
+      if (result) change({ ...result, layout: { ...result.layout, activeWall: target } });
+      setSelected(item.id);
+      setView("front");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      if (nextLayout !== layout) change({ layout: { ...nextLayout, activeWall: target } });
+      setEditor(item);
+      setLibrary(false);
+    }
+  }
+  function addSpacerDirect() {
+    const item = newSpacer(wall.id, "base");
+    item.placement = appendPlacement(offer.elements, item, wall.id, layout);
+    saveItem(item);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
   const scale = elevationScale;
   const scene = useMemo(() => elevationScene(offer, wall.id), [offer, wall.id]);
   const { drag, canOpen } = useLayoutDrag({
@@ -153,8 +184,6 @@ export default function KitchenView({
       }
     },
   });
-  const grouped =
-    group === "Viseći" ? "Gornji" : group === "Ostali" ? "Dodatni" : group;
   function selectItem(e: LayoutItem) {
     setSelected(e.id);
     setFocusRequest((n) => n + 1);
@@ -298,6 +327,19 @@ export default function KitchenView({
             >
               <Plus size={19} />
             </button>
+            <div
+              className="kitchen-view-modes"
+              role="group"
+              aria-label="Pogled kuhinje"
+            >
+              <button
+                onClick={() =>
+                  setView((v) => (v === "front" ? "top" : "front"))
+                }
+              >
+                {view === "front" ? "Odozgo" : "Spreda"}
+              </button>
+            </div>
           </div>
           <div
             className={`wall-measure ${usage.overrun ? "over-capacity" : ""}`}
@@ -336,23 +378,38 @@ export default function KitchenView({
               {dragNotice}
             </div>
           )}
-          <ElevationViewport
-            scene={scene}
-            scale={scale}
-            onScale={setElevationScale}
-            selected={selected}
-            drag={drag}
-            onSettings={() => setVisualSettings(true)}
-            onSelect={(e) => {
-              if (canOpen()) selectItem(e);
-            }}
-            fullscreen={fullscreen.active}
-            focusRequest={focusRequest}
-            onFullscreen={() => void fullscreen.enter()}
-            onCloseFullscreen={() => void fullscreen.exit()}
-            walls={layout.walls}
-            onChooseWall={chooseWall}
-          />
+          {view === "top" ? (
+            <TopViewport
+              scene={scene}
+              selected={selected}
+              onSelect={selectItem}
+              fullscreen={fullscreen.active}
+              onFullscreen={() => void fullscreen.enter()}
+              onCloseFullscreen={() => void fullscreen.exit()}
+              onFront={() => setView("front")}
+              walls={layout.walls}
+              onChooseWall={chooseWall}
+            />
+          ) : (
+            <ElevationViewport
+              scene={scene}
+              scale={scale}
+              onScale={setElevationScale}
+              selected={selected}
+              drag={drag}
+              onSettings={() => setVisualSettings(true)}
+              onSelect={(e) => {
+                if (canOpen()) selectItem(e);
+              }}
+              fullscreen={fullscreen.active}
+              focusRequest={focusRequest}
+              onFullscreen={() => void fullscreen.enter()}
+              onCloseFullscreen={() => void fullscreen.exit()}
+              walls={layout.walls}
+              onChooseWall={chooseWall}
+              onTopView={() => setView("top")}
+            />
+          )}
           <ElementStrip
             hidden={fullscreen.active}
             items={elements}
@@ -366,6 +423,30 @@ export default function KitchenView({
           >
             <Plus size={22} /> Dodaj element
           </button>
+          {!fullscreen.active && (
+            <section className="kitchen-inline-library" aria-label="Biblioteka elemenata">
+              {libraryGroups.map((category) => (
+                <div key={category}>
+                  <h3>{category}</h3>
+                  <div className="library-grid">
+                    {libraryTemplates.filter((t) => t.group === category).map((t) => (
+                      <button key={t.kind} type="button" onClick={() => addTemplate(t, true)}
+                        aria-label={`Dodaj ${t.name}`}>
+                        <Cabinet kind={t.kind} size={44} />
+                        <strong>{t.name}</strong>
+                        {t.unsupported && <small>Precizan obračun nije dostupan</small>}
+                      </button>
+                    ))}
+                    {category === "Dodaci" && (
+                      <button type="button" onClick={addSpacerDirect} aria-label="Dodaj namerni razmak">
+                        <Ruler size={44} /><strong>Namerni razmak</strong>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
         </div>
         {!elements.length && (
           <div className="kitchen-empty">
@@ -384,7 +465,7 @@ export default function KitchenView({
         {library && (
           <Modal title="Dodaj element" wide onClose={() => setLibrary(false)}>
             <div className="library-groups">
-              {["Donji", "Viseći", "Visoki", "Ostali"].map((g) => (
+              {libraryGroups.map((g) => (
                 <button
                   key={g}
                   className={g === group ? "active" : ""}
@@ -395,38 +476,12 @@ export default function KitchenView({
               ))}
             </div>
             <div className="library-grid">
-              {templates
-                .filter((t) => t.group === grouped)
+              {libraryTemplates
+                .filter((t) => t.group === group)
                 .map((t) => (
                   <button
                     key={t.kind}
-                    disabled={t.unsupported}
-                    onClick={() => {
-                      const e = newElement(t.kind, offer.selection);
-                      let target = wall.id;
-                      if (e.kind === "island") {
-                        target = "island";
-                        if (!layout.walls.some((w) => w.id === target))
-                          change({
-                            layout: {
-                              ...layout,
-                              walls: [
-                                ...layout.walls,
-                                { id: target, name: "Ostrvo", length: 3000 },
-                              ],
-                              activeWall: target,
-                            },
-                          });
-                      }
-                      e.placement = appendPlacement(
-                        offer.elements,
-                        e,
-                        target,
-                        layout,
-                      );
-                      setEditor(e);
-                      setLibrary(false);
-                    }}
+                    onClick={() => addTemplate(t, false)}
                   >
                     <Cabinet kind={t.kind} size={62} />
                     <strong>{t.name}</strong>
@@ -435,7 +490,7 @@ export default function KitchenView({
                     )}
                   </button>
                 ))}
-              {group !== "Visoki" && (
+              {group !== "Visoki" && group !== "Ostrvski" && (
                 <button
                   onClick={() => {
                     const spacer = newSpacer(

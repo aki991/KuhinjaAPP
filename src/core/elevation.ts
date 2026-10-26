@@ -2,6 +2,7 @@ import {
   elementCodes,
   isSpacer,
   laneOf,
+  rowOf,
   packLayout,
   wallUsage,
 } from "./layout";
@@ -14,7 +15,10 @@ import type {
   Opening,
   VisualAppliance,
   WallObject,
+  ProductAppearance,
+  Selection,
 } from "./types";
+import { productAppearance } from "./appearance";
 import {
   effectiveSelection,
   frontOverhang,
@@ -43,6 +47,13 @@ export interface ElevationEntry {
   conflict: boolean;
   frontOverhang: number;
   frontHeight: number;
+  finish?: {
+    body: ProductAppearance;
+    front: ProductAppearance;
+    worktop: ProductAppearance;
+    handle: ProductAppearance;
+  };
+  handlePosition?: Selection["handlePosition"];
   verticalProfile?: {
     top: number;
     bottom: number;
@@ -134,7 +145,7 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
     (e): e is KitchenElement =>
       !isSpacer(e) &&
       laneOf(e) === "base" &&
-      !["tall", "tallOven", "fridge"].includes(e.kind),
+      rowOf(e) !== "tall",
   );
   const baseTop = lower.length
       ? Math.max(
@@ -165,6 +176,31 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
       row: laneOf(item),
       rect,
       opening: selection.opening,
+      finish: {
+        body: productAppearance(
+          offer.prices.find((p) => p.id === selection.body),
+        ),
+        front:
+          selection.frontMode === "ral" && selection.ralColor
+            ? {
+                ...productAppearance(
+                  offer.prices.find((p) => p.id === selection.front),
+                ),
+                color: selection.ralColor,
+                texture: "solid" as const,
+                image: undefined,
+              }
+            : productAppearance(
+                offer.prices.find((p) => p.id === selection.front),
+              ),
+        worktop: productAppearance(
+          offer.prices.find((p) => p.id === selection.worktop),
+        ),
+        handle: productAppearance(
+          offer.prices.find((p) => p.id === selection.handle),
+        ),
+      },
+      handlePosition: selection.handlePosition,
       verticalProfile:
         !isSpacer(item) && selection.opening === "gola"
           ? (() => {
@@ -240,7 +276,7 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
           (e) =>
             !isSpacer(e.item) &&
             e.row === "base" &&
-            !["tall", "fridge", "tallOven"].includes(e.item.kind) &&
+            rowOf(e.item) !== "tall" &&
             e.rect.x < x + item.width &&
             e.rect.x + e.rect.width > x,
         ),
@@ -291,7 +327,7 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
   }
   const tall = entries.filter(
     (e) =>
-      !isSpacer(e.item) && ["tall", "fridge", "tallOven"].includes(e.item.kind),
+      !isSpacer(e.item) && rowOf(e.item) === "tall",
   );
   for (const e of entries.filter(
     (e) => e.row === "wall" && !isSpacer(e.item),
@@ -546,5 +582,60 @@ export function elevationCamera(
           ? canvasHeight - viewportHeight
           : focusTop,
     ),
+  };
+}
+
+/** Complete, scroll-free framing. Dimension rows are reserved by the view. */
+export function containedElevationCamera(
+  scene: ElevationScene,
+  width: number,
+  maxHeight: number,
+  bottom: number,
+  fullscreen = false,
+) {
+  const kitchen = kitchenBounds(scene),
+    left = Math.min(0, kitchen.x),
+    right = Math.max(scene.length, kitchen.x + kitchen.width),
+    low = kitchen.y,
+    high = kitchen.y + kitchen.height,
+    bounds = {
+      x: left,
+      y: low,
+      width: Math.max(1, right - left),
+      height: Math.max(1, high - low),
+    },
+    top = fullscreen ? 104 : 38,
+    fitted = Math.max(
+      0.000001,
+      Math.min(
+        0.65,
+        (width - 44) / bounds.width,
+        Math.max(1, maxHeight - top - bottom) / bounds.height,
+      ),
+    ),
+    viewportHeight = fullscreen
+      ? Math.floor(maxHeight)
+      : Math.min(
+          Math.floor(maxHeight),
+          Math.max(180, Math.ceil(top + bounds.height * fitted + bottom)),
+        ),
+    spare = Math.max(0, viewportHeight - top - bottom - bounds.height * fitted),
+    margin = {
+      left:
+        32 +
+        Math.max(0, width - 44 - bounds.width * fitted) / 2 -
+        bounds.x * fitted,
+      top: top + spare / 2 - (scene.height - bounds.y - bounds.height) * fitted,
+    };
+  return {
+    bounds,
+    fitted,
+    scale: fitted,
+    margin,
+    viewportHeight,
+    canvasWidth: width,
+    canvasHeight: viewportHeight,
+    focusLeft: 0,
+    focusTop: 0,
   };
 }

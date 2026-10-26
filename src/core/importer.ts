@@ -3,12 +3,18 @@ import type { Product, Unit } from "./types";
 export const columns = [
   "Šifra",
   "Naziv",
+  "Proizvođač",
   "Kategorija",
   "Dobavljač",
   "Jedinica mere",
   "Cena",
   "Valuta",
+  "PDV (%)",
+  "Rabat (%)",
   "Napomena",
+  "Širina",
+  "Visina",
+  "Dubina",
   "Širina table",
   "Visina table",
 ] as const;
@@ -22,10 +28,19 @@ const normalize = (s: string) =>
     .toLowerCase()
     .trim();
 export function guessMapping(headers: string[]): Mapping {
+  const aliases: Partial<Record<ColumnName, string[]>> = {
+    "Šifra": ["Sifra artikla", "Artikal", "SKU", "Code"],
+    "Jedinica mere": ["JM", "Jedinica", "Unit"],
+    "PDV (%)": ["PDV", "Stopa PDV", "VAT"],
+    "Rabat (%)": ["Rabat", "Popust", "Discount"],
+    "Širina": ["Sirina mm", "Width"],
+    "Visina": ["Visina mm", "Height"],
+    "Dubina": ["Dubina mm", "Depth"],
+  };
   return Object.fromEntries(
     columns.map((c) => [
       c,
-      headers.find((h) => normalize(h) === normalize(c)) || "",
+      headers.find((h) => [c, ...(aliases[c] || [])].some((name) => normalize(h) === normalize(name))) || "",
     ]),
   ) as Mapping;
 }
@@ -50,7 +65,8 @@ export function validateRows(
 ) {
   const valid: Product[] = [],
     errors: string[] = [],
-    duplicates: string[] = [];
+    duplicates: string[] = [],
+    priceChanges: { code: string; supplier: string; oldPrice: number; newPrice: number; currency: string; oldCurrency: string }[] = [];
   const seen = new Set<string>();
   rows.forEach((row, i) => {
     const get = (c: ColumnName) => row[mapping[c]],
@@ -94,6 +110,19 @@ export function validateRows(
       rowErrors.push("valuta mora biti RSD ili EUR");
     const sheetWidth = parseNumber(get("Širina table")),
       sheetHeight = parseNumber(get("Visina table"));
+    const optional = (name: ColumnName, min: number, max: number) => {
+      const raw = str(name);
+      if (!raw) return undefined;
+      const value = parseNumber(raw);
+      if (!Number.isFinite(value) || value < min || value > max)
+        rowErrors.push(`${name} mora biti između ${min} i ${max}`);
+      return value;
+    };
+    const width = optional("Širina", 1, 6000),
+      height = optional("Visina", 1, 6000),
+      depth = optional("Dubina", 1, 3000),
+      vatRate = optional("PDV (%)", 0, 100),
+      discountRate = optional("Rabat (%)", 0, 99.99);
     if (unit === "tabla" && (!(sheetWidth > 0) || !(sheetHeight > 0)))
       rowErrors.push("cena po tabli zahteva širinu i visinu table u mm");
     if (unit === "tabla" && sheetWidth * sheetHeight > 30e6)
@@ -145,6 +174,8 @@ export function validateRows(
       duplicates.push(
         `Red ${i + 2}: ${code} / ${supplier} — ažurira postojeću cenu.`,
       );
+    if (prev && (prev.price !== price || prev.currency !== currency))
+      priceChanges.push({ code, supplier, oldPrice: prev.price, newPrice: price, currency, oldCurrency: prev.currency });
     const text = normalize(name),
       tier =
         prev?.tier ||
@@ -163,16 +194,21 @@ export function validateRows(
       name,
       category: category!,
       supplier,
-      manufacturer: prev?.manufacturer || "",
+      manufacturer: str("Proizvođač") || prev?.manufacturer || "",
       unit,
       price,
       currency: currency as Product["currency"],
       active: true,
       note: str("Napomena"),
+      ...(width !== undefined ? { width } : {}),
+      ...(height !== undefined ? { height } : {}),
+      ...(depth !== undefined ? { depth } : {}),
+      ...(vatRate !== undefined ? { vatRate } : {}),
+      ...(discountRate !== undefined ? { discountRate } : {}),
       ...(["slide", "hinge", "lift"].includes(category!) ? { tier } : {}),
       ...(category === "front" ? { kind } : {}),
       ...(unit === "tabla" ? { sheetWidth, sheetHeight } : {}),
     });
   });
-  return { valid, errors, duplicates };
+  return { valid, errors, duplicates, priceChanges };
 }

@@ -92,7 +92,11 @@ export default function ElementEditor({
         onChange={(e) =>
           setValue({
             ...value,
-            selection: { ...value.selection, [key]: e.target.value },
+            selection: {
+              ...value.selection,
+              [key]: e.target.value,
+              ...(key === "front" ? { frontMode: "separate" as const } : {}),
+            },
             locked: true,
           })
         }
@@ -124,7 +128,7 @@ export default function ElementEditor({
               settings,
               products,
             );
-            if (check.errors.length) {
+            if (check.errors.length && !t.unsupported) {
               setErrors(check.errors);
               return;
             }
@@ -136,6 +140,7 @@ export default function ElementEditor({
             <Cabinet kind={value.kind} size={88} />
             <span>Sve dimenzije u mm</span>
           </div>
+          {t.unsupported && <p className="layout-warning">Precizan obračun nije dostupan za ovaj tip. Dimenzije i raspored možete sačuvati.</p>}
           {actions}
           <div className="dimension-fields">
             {numeric("width", "Širina", 80, 6000)}

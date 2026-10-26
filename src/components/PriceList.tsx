@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   Upload,
@@ -26,6 +26,7 @@ import { Field, IconBox, Modal, money, SectionHeading } from "./UI";
 import PushRuleEditor from "./PushRuleEditor";
 import VerticalGolaRuleEditor from "./VerticalGolaRuleEditor";
 import { validPushRule, validVerticalGolaRule } from "../core/opening";
+import { productAppearance, validAppearance } from "../core/appearance";
 export default function PriceList({
   products,
   suppliers,
@@ -52,6 +53,14 @@ export default function PriceList({
     } | null>(null),
     [mapping, setMapping] = useState<Mapping>(guessMapping([])),
     [importing, setImporting] = useState(false);
+  const [formats, setFormats] = useState<{ supplier: string; mapping: Mapping }[]>([]);
+  const [formatNotice, setFormatNotice] = useState("");
+  useEffect(() => {
+    void db.meta.toArray().then((rows) => setFormats(rows
+      .filter((x) => x.id.startsWith("import-format:"))
+      .map((x) => x.value as { supplier: string; mapping: Mapping })
+      .filter((x) => x?.supplier && x?.mapping)));
+  }, []);
   const fileRef = useRef<HTMLInputElement>(null);
   const validation = useMemo(
     () => (imported ? validateRows(imported.rows, mapping, products) : null),
@@ -69,8 +78,13 @@ export default function PriceList({
     if (!file) return;
     try {
       const data = await readExcel(file);
+      const guessed = guessMapping(data.headers);
+      const supplierColumn = guessed["Dobavljač"];
+      const names = new Set(data.rows.map((row) => String(row[supplierColumn] ?? "").trim()).filter(Boolean));
+      const saved = names.size === 1 ? formats.find((f) => f.supplier.toLowerCase() === [...names][0].toLowerCase()) : undefined;
       setImported({ ...data, name: file.name });
-      setMapping(guessMapping(data.headers));
+      setMapping(saved ? Object.fromEntries(columns.map((c) => [c, data.headers.includes(saved.mapping[c]) ? saved.mapping[c] : guessed[c]])) as Mapping : guessed);
+      setFormatNotice(saved ? `Učitan sačuvan format: ${saved.supplier}` : "");
     } catch (e) {
       notify((e as Error).message);
     }
@@ -78,6 +92,10 @@ export default function PriceList({
   }
   async function saveProduct() {
     if (!edit) return;
+    if (edit.appearance && !validAppearance(edit.appearance)) {
+      notify("Proverite boju i sliku artikla.");
+      return;
+    }
     if (
       (edit.verticalGolaRule &&
         !validVerticalGolaRule(edit.verticalGolaRule)) ||
@@ -98,6 +116,12 @@ export default function PriceList({
           "Jedinica mere": edit.unit,
           Cena: edit.price,
           Valuta: edit.currency,
+          "Proizvođač": edit.manufacturer,
+          "Širina": edit.width,
+          "Visina": edit.height,
+          "Dubina": edit.depth,
+          "PDV (%)": edit.vatRate,
+          "Rabat (%)": edit.discountRate,
           "Širina table": edit.sheetWidth,
           "Visina table": edit.sheetHeight,
         },
@@ -341,6 +365,14 @@ export default function PriceList({
               />
             </Field>
             <div className="field-grid">
+              {(["width", "height", "depth"] as const).map((key) => (
+                <Field key={key} label={{ width: "Širina artikla (mm)", height: "Visina artikla (mm)", depth: "Dubina artikla (mm)" }[key]}>
+                  <input type="number" min="1" max="6000" value={edit[key] ?? ""}
+                    onChange={(e) => update({ [key]: e.target.value ? Number(e.target.value) : undefined })} />
+                </Field>
+              ))}
+            </div>
+            <div className="field-grid">
               <Field label="Nabavna cena">
                 <input
                   required
@@ -374,6 +406,16 @@ export default function PriceList({
                     <option key={u}>{u}</option>
                   ))}
                 </select>
+              </Field>
+            </div>
+            <div className="field-grid">
+              <Field label="PDV (%) · cena bez PDV-a">
+                <input type="number" min="0" max="100" step="0.01" value={edit.vatRate ?? ""}
+                  onChange={(e) => update({ vatRate: e.target.value ? Number(e.target.value) : undefined })} />
+              </Field>
+              <Field label="Moj rabat (%)">
+                <input type="number" min="0" max="99.99" step="0.01" value={edit.discountRate ?? ""}
+                  onChange={(e) => update({ discountRate: e.target.value ? Number(e.target.value) : undefined })} />
               </Field>
             </div>
             {edit.unit === "tabla" && (
@@ -440,6 +482,119 @@ export default function PriceList({
                   />
                 </Field>
               </>
+            )}
+            {["body", "front", "worktop", "handle"].includes(edit.category) && (
+              <details className="editor-details">
+                <summary>Izgled artikla</summary>
+                <div className="field-grid">
+                  <Field label="Boja dekora">
+                    <input
+                      type="color"
+                      value={productAppearance(edit).color}
+                      onChange={(e) =>
+                        update({
+                          appearance: {
+                            ...productAppearance(edit),
+                            color: e.target.value,
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Tekstura">
+                    <select
+                      value={productAppearance(edit).texture}
+                      onChange={(e) =>
+                        update({
+                          appearance: {
+                            ...productAppearance(edit),
+                            texture: e.target.value as
+                              "solid" | "wood" | "stone",
+                          },
+                        })
+                      }
+                    >
+                      <option value="solid">Jednobojno</option>
+                      <option value="wood">Drvo</option>
+                      <option value="stone">Kamen</option>
+                    </select>
+                  </Field>
+                </div>
+                {edit.category === "worktop" && (
+                  <Field label="Debljina radne ploče (mm)">
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={edit.thickness ?? ""}
+                      onChange={(e) =>
+                        update({
+                          thickness: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                    />
+                  </Field>
+                )}
+                <Field label="Fotografija dekora ili ručice">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      if (f.size > 2 * 1024 * 1024) {
+                        notify("Fotografija može imati najviše 2 MB.");
+                        return;
+                      }
+                      try {
+                        const data = await new Promise<string>(
+                          (resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () =>
+                              resolve(String(reader.result));
+                            reader.onerror = () =>
+                              reject(new Error("Slika nije učitana."));
+                            reader.readAsDataURL(f);
+                          },
+                        );
+                        const appearance = {
+                          ...productAppearance(edit),
+                          image: data,
+                        };
+                        if (!validAppearance(appearance)) {
+                          notify("Koristite PNG, JPG ili WebP fotografiju.");
+                          return;
+                        }
+                        update({ appearance });
+                      } catch (error) {
+                        notify((error as Error).message);
+                      }
+                    }}
+                  />
+                </Field>
+                {edit.appearance?.image && (
+                  <>
+                    <img
+                      className="product-image-preview"
+                      src={edit.appearance.image}
+                      alt="Izgled artikla"
+                    />
+                    <button
+                      className="text-btn"
+                      type="button"
+                      onClick={() =>
+                        update({
+                          appearance: { ...edit.appearance!, image: undefined },
+                        })
+                      }
+                    >
+                      Ukloni fotografiju
+                    </button>
+                  </>
+                )}
+              </details>
             )}
             <Field label="Napomena">
               <textarea
@@ -576,6 +731,21 @@ export default function PriceList({
             </span>
           </div>
           <h3>1. Proverite mapiranje kolona</h3>
+          {formatNotice && <p className="muted">{formatNotice}</p>}
+          {!!formats.length && (
+            <Field label="Sačuvani format dobavljača">
+              <select aria-label="Sačuvani format dobavljača" defaultValue="" onChange={(e) => {
+                const saved = formats.find((f) => f.supplier === e.target.value);
+                if (saved) {
+                  setMapping(Object.fromEntries(columns.map((c) => [c, imported.headers.includes(saved.mapping[c]) ? saved.mapping[c] : ""])) as Mapping);
+                  setFormatNotice(`Učitan sačuvan format: ${saved.supplier}`);
+                }
+              }}>
+                <option value="">Izaberi sačuvan format</option>
+                {formats.map((f) => <option key={f.supplier} value={f.supplier}>{f.supplier}</option>)}
+              </select>
+            </Field>
+          )}
           <div className="mapping-grid">
             {columns.map((c) => (
               <Field key={c} label={c}>
@@ -640,6 +810,19 @@ export default function PriceList({
               </span>
             </div>
           )}
+          {!!validation.priceChanges.length && (
+            <div className="table-scroll" aria-label="Promene cena pre uvoza">
+              <table><thead><tr><th>Artikal</th><th>Pre</th><th>Nova cena</th><th>Razlika</th></tr></thead>
+                <tbody>{validation.priceChanges.map((p) => (
+                  <tr key={`${p.supplier}:${p.code}`}><td>{p.code} · {p.supplier}</td>
+                    <td>{new Intl.NumberFormat("sr-Latn-RS").format(p.oldPrice)} {p.oldCurrency}</td>
+                    <td>{new Intl.NumberFormat("sr-Latn-RS").format(p.newPrice)} {p.currency}</td>
+                    <td>{p.oldCurrency === p.currency ? `${p.newPrice - p.oldPrice >= 0 ? "+" : ""}${new Intl.NumberFormat("sr-Latn-RS").format(p.newPrice - p.oldPrice)} ${p.currency}` : "Promena valute"}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
           <button
             className="btn primary full"
             disabled={
@@ -654,6 +837,7 @@ export default function PriceList({
                   "rw",
                   db.products,
                   db.suppliers,
+                  db.meta,
                   async () => {
                     await db.products.bulkPut(validation.valid);
                     for (const name of new Set(
@@ -665,8 +849,14 @@ export default function PriceList({
                           name,
                           isDefault: false,
                         });
+                    for (const supplier of new Set(validation.valid.map((p) => p.supplier)))
+                      await db.meta.put({ id: `import-format:${supplier.toLowerCase()}`, value: { supplier, mapping } });
                   },
                 );
+                setFormats((current) => [
+                  ...current.filter((f) => !validation.valid.some((p) => p.supplier.toLowerCase() === f.supplier.toLowerCase())),
+                  ...[...new Set(validation.valid.map((p) => p.supplier))].map((supplier) => ({ supplier, mapping })),
+                ]);
                 await onRefresh();
                 setImported(null);
                 notify("Cenovnik uvezen.");

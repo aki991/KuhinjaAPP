@@ -17,7 +17,7 @@ export default defineConfig({
         "brand/*.svg",
       ],
       manifest: {
-        name: "Kuhinja Kalkulator",
+        name: "Kuhinja po meri",
         short_name: "Kuhinja",
         description: "Kalkulator kuhinja po meri",
         lang: "sr-Latn",

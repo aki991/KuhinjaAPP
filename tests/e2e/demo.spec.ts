@@ -7,11 +7,29 @@ const value = (s: string) =>
       .replace(",", ".")
       .replace(/\s/g, ""),
   );
-const nav = (page: Page, name: string) =>
-  page
+const nav = async (page: Page, name: string) => {
+  const settings = page.getByRole("dialog", {
+    name: "Podešavanja i rezervne kopije",
+    exact: true,
+  });
+  if (name === "Cenovnik") {
+    if (!(await settings.isVisible()))
+      await page
+        .locator(".app-header")
+        .getByRole("button", { name: "Podešavanja", exact: true })
+        .click();
+    await settings.getByRole("tab", { name: "Cenovnik", exact: true }).click();
+    return;
+  }
+  if (await settings.isVisible())
+    await settings
+      .getByRole("button", { name: "Zatvori", exact: true })
+      .click();
+  await page
     .locator(".bottom-nav")
     .getByRole("button", { name, exact: true })
     .click();
+};
 async function openKitchen(page: Page) {
   await page.goto("/");
   await expect(
@@ -195,7 +213,9 @@ test("Excel povratni uvoz i CSV ručno mapiranje", async ({ page }) => {
   await page
     .getByRole("button", { name: "Potvrdi uvoz · 28 artikala" })
     .click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("dialog", { name: "Uvoz cenovnika", exact: true }),
+  ).toHaveCount(0);
   await page.locator('input[type=file][accept=".xlsx,.csv"]').setInputFiles({
     name: "cenovnik.csv",
     mimeType: "text/csv",
@@ -204,7 +224,7 @@ test("Excel povratni uvoz i CSV ručno mapiranje", async ({ page }) => {
     ),
   });
   await page
-    .getByRole("dialog")
+    .getByRole("dialog", { name: "Uvoz cenovnika", exact: true })
     .getByRole("combobox", { name: "Šifra", exact: true })
     .selectOption("Code");
   await expect(page.getByText("1 validnih artikala")).toBeVisible();
@@ -229,7 +249,7 @@ test("mobilni ekrani 360×800, 390×844 i 430×932: bez prelivanja i sitnih kont
       page.getByRole("button", { name: "Dodaj element", exact: true }),
     ).toBeInViewport();
     await capture(page, `kuhinja-${width}`);
-    for (const screen of ["Kuhinja", "Cena", "Cenovnik", "Početna"]) {
+    for (const screen of ["Kuhinja", "Cena", "Cenovnik", "Izgled", "Početna"]) {
       await nav(page, screen);
       expect(
         await page.evaluate(
@@ -325,7 +345,7 @@ test("nova kuhinja: dužina, dodavanje, dupliranje, redosled, zid i ponovno otva
     .click();
   await capture(page, "biblioteka");
   await page
-    .getByRole("button", { name: "Donji sa jednim vratima", exact: true })
+    .getByRole("button", { name: "Jedna vrata — levo", exact: true })
     .click();
   await page.getByLabel("Širina", { exact: true }).fill("800");
   await page
@@ -450,9 +470,9 @@ test("zid: ručna dužina, upozorenje prekoračenja i posebna grupa ostrva", asy
   await page
     .getByRole("button", { name: "Dodaj element", exact: true })
     .click();
-  await page.getByRole("button", { name: "Ostali", exact: true }).click();
+  await page.getByRole("button", { name: "Ostrvski", exact: true }).click();
   await page
-    .getByRole("button", { name: "Jednostavan ostrvski element", exact: true })
+    .getByRole("button", { name: "Ostrvski element sa vratima", exact: true })
     .click();
   await page
     .getByRole("dialog")

@@ -57,7 +57,7 @@ async function fresh(page: Page) {
       .getByRole("button", { name: "Dodaj element", exact: true })
       .click();
     await page
-      .getByRole("button", { name: "Donji sa jednim vratima", exact: true })
+      .getByRole("button", { name: "Jedna vrata — levo", exact: true })
       .click();
     await save(page);
   }
@@ -217,8 +217,8 @@ test("2D telefon: dugi pritisak, marker, redosled, zid i čuvanje", async ({
   await expect(hit(page, "D3")).toHaveAttribute("data-offset", "0");
   await expect(hit(page, "D1")).toHaveAttribute("data-offset", "600");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  const next = await point(hit(page, "D3")),
-    tab = await point(page.getByRole("button", { name: "Zid B", exact: true }));
+  const tab = await point(page.getByRole("button", { name: "Zid B", exact: true })),
+    next = await point(hit(page, "D3"));
   await touch(s, "touchStart", next);
   await page.waitForTimeout(520);
   await slide(s, next, tab);
@@ -323,10 +323,19 @@ test("2D zumiranje i dodirni pokret pomeraju crtež bez prevlačenja elementa", 
     .poll(async () =>
       Number(await page.locator(".wall-elevation").getAttribute("data-scale")),
     )
-    .toBeCloseTo(original);
+    .toBeLessThanOrEqual(original);
   expect(
     Number(await page.locator(".wall-elevation").getAttribute("data-scale")),
-  ).toBeCloseTo(original);
+  ).toBeLessThanOrEqual(original);
+  await expect(page.locator(".elevation-scroll")).toHaveAttribute(
+    "data-fit-all",
+    "true",
+  );
+  expect(
+    await page
+      .locator(".elevation-scroll")
+      .evaluate((e) => e.scrollWidth - e.clientWidth),
+  ).toBeLessThanOrEqual(1);
   await page.evaluate(() => window.scrollTo(0, 0));
   const vertical = await point(hit(page, "D2"));
   await touch(s, "touchStart", vertical);

@@ -47,6 +47,7 @@ export default function OfferView({
   products,
   suppliers,
   notify,
+  initialScreen = "summary",
 }: {
   offer: Offer;
   onChange: (o: Offer) => void;
@@ -56,9 +57,10 @@ export default function OfferView({
   suppliers: Supplier[];
   notify: (s: string) => void;
   onNew?: () => void;
+  initialScreen?: "summary" | "optimize";
 }) {
   const [screen, setScreen] = useState<"summary" | "optimize" | "customer">(
-      "summary",
+      initialScreen,
     ),
     [previous, setPrevious] = useState<Offer | null>(null),
     [baseline, setBaseline] = useState<{ total: number; cost: number } | null>(
@@ -129,12 +131,25 @@ export default function OfferView({
   ) => {
     const p = findProduct(offer.prices, category, tier, kind, preferred);
     if (p) {
-      if (p.id !== offer.selection[key])
-        change({ selection: { ...offer.selection, [key]: p.id } });
+      if (
+        p.id !== offer.selection[key] ||
+        (key === "front" && offer.selection.frontMode === "body")
+      )
+        change({
+          selection: {
+            ...offer.selection,
+            [key]: p.id,
+            ...(key === "front" ? { frontMode: "separate" as const } : {}),
+          },
+        });
     } else notify("Nema aktivnog modela za ovaj izbor.");
   };
   const models = (key: SelectionProductKey, category: Category) => {
-    const selected = product(offer.selection[key]),
+    const selected = product(
+        key === "front" && offer.selection.frontMode === "body"
+          ? offer.selection.body
+          : offer.selection[key],
+      ),
       choices = offer.prices.filter(
         (p) =>
           p.active &&
@@ -145,9 +160,15 @@ export default function OfferView({
     return (
       <Field key={key} label={categories[category]}>
         <select
-          value={offer.selection[key]}
+          value={selected?.id ?? offer.selection[key]}
           onChange={(e) =>
-            change({ selection: { ...offer.selection, [key]: e.target.value } })
+            change({
+              selection: {
+                ...offer.selection,
+                [key]: e.target.value,
+                ...(key === "front" ? { frontMode: "separate" as const } : {}),
+              },
+            })
           }
         >
           {choices.map((p) => (
@@ -406,11 +427,19 @@ export default function OfferView({
             </fieldset>
             <fieldset>
               <legend>Frontovi</legend>
+              {offer.selection.frontMode === "body" && (
+                <small className="opening-compatible-note">
+                  Isto kao korpus
+                </small>
+              )}
               <div className="choice-buttons">
                 {["univer", "mdf", "lacquer"].map((kind, i) => (
                   <button
                     key={kind}
-                    aria-pressed={product(offer.selection.front)?.kind === kind}
+                    aria-pressed={
+                      offer.selection.frontMode !== "body" &&
+                      product(offer.selection.front)?.kind === kind
+                    }
                     onClick={() =>
                       selectModel("front", "front", undefined, kind)
                     }

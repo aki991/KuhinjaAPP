@@ -3,7 +3,7 @@ test("2D GOLA i push crtaju frontove bez klasičnih ručki", async ({ page }) =>
   await page.goto("/");
   await page.getByRole("button", { name: "Nova kuhinja", exact: true }).click();
   await page.getByRole("button", { name: "Dodaj elemente" }).click();
-  for (const name of ["Donji sa jednim vratima", "Fiokar sa 3 fioke"]) {
+  for (const name of ["Jedna vrata — levo", "Fiokar — 3 fioke"]) {
     await page
       .getByRole("button", { name: "Dodaj element", exact: true })
       .click();

@@ -9,6 +9,7 @@ import "./kitchen-actions.css";
 import "./layout-drag.css";
 import "./wood-theme.css";
 import "./elevation-detail.css";
+import "./appearance.css";
 import { registerSW } from "virtual:pwa-register";
 registerSW({
   onOfflineReady() {

@@ -30,6 +30,8 @@ export function construct(
     warnings: string[] = [],
     errors: string[] = [];
   const template = templates.find((t) => t.kind === e.kind);
+  if (template?.constructionKind)
+    return construct({ ...e, kind: template.constructionKind }, sel, s, products);
   if (
     sel.frontOverhang !== undefined &&
     (!Number.isInteger(sel.frontOverhang) ||
@@ -42,7 +44,7 @@ export function construct(
       panels,
       hardware,
       warnings,
-      errors: ["Ugaoni element nije podržan za precizan obračun."],
+      errors: [template?.rule || "Precizan obračun nije dostupan za ovaj tip elementa."],
     };
   const { width: w, height: h, depth: d } = e,
     t = s.thickness,

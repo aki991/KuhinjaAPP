@@ -18,6 +18,7 @@ import {
   Search,
   HardDrive,
   CircleHelp,
+  Palette,
 } from "lucide-react";
 import { defaultSelection, defaults, findProduct } from "./core/catalog";
 import {
@@ -30,7 +31,7 @@ import {
   persistProject,
   type Backup,
 } from "./core/db";
-import { calculateOffer } from "./core/engine";
+import { calculateOffer, onlyUnsupportedErrors } from "./core/engine";
 import { download } from "./core/files";
 import type {
   Offer,
@@ -43,10 +44,11 @@ import { Field, Modal } from "./components/UI";
 import OfferView from "./components/OfferView";
 import PriceList from "./components/PriceList";
 import KitchenView from "./components/KitchenView";
+import AppearanceView from "./components/AppearanceView";
 import { defaultLayout, displayProject, ensureLayout } from "./core/layout";
 import { ensureElevation } from "./core/elevation";
 import { ensureOpenings, productSelectionKeys } from "./core/opening";
-type Page = "home" | "kitchen" | "cost" | "offers" | "prices";
+type Page = "home" | "kitchen" | "cost" | "offers" | "prices" | "appearance";
 export default function App() {
   const [page, setPage] = useState<Page>("home"),
     [offers, setOffers] = useState<Offer[]>([]),
@@ -59,6 +61,8 @@ export default function App() {
     [error, setError] = useState(""),
     [toast, setToast] = useState(""),
     [settingsOpen, setSettingsOpen] = useState(false),
+    [settingsTab, setSettingsTab] = useState<"general" | "prices">("general"),
+    [openMaterials, setOpenMaterials] = useState(false),
     [newOpen, setNewOpen] = useState(false),
     [newClient, setNewClient] = useState(createOffer().client),
     [newLength, setNewLength] = useState(3000),
@@ -138,7 +142,7 @@ export default function App() {
   async function save() {
     if (!offer) return;
     const c = calculateOffer(offer);
-    if (!c.count || c.errors.length) {
+    if (!c.count || (c.errors.length && !onlyUnsupportedErrors(offer))) {
       notify("Dodajte elemente i ispravite greške pre čuvanja.");
       return;
     }
@@ -147,7 +151,7 @@ export default function App() {
       setOffer(savedOffer);
       await db.meta.put({ id: "draft", value: savedOffer });
       await refresh();
-      notify("Projekat sačuvan.");
+      notify(c.errors.length ? "Projekat sačuvan. Precizan obračun za neke elemente nije dostupan." : "Projekat sačuvan.");
     } catch (e) {
       notify("Čuvanje nije uspelo: " + (e as Error).message);
     }
@@ -234,7 +238,7 @@ export default function App() {
   if (error)
     return (
       <div className="startup">
-        <h1>Kuhinja Kalkulator</h1>
+        <h1>Kuhinja po meri</h1>
         <p>{error}</p>
         <button className="btn primary" onClick={() => location.reload()}>
           Pokušaj ponovo
@@ -245,7 +249,7 @@ export default function App() {
     return (
       <div className="startup">
         <img src="/brand/logo.png" width="58" alt="" />
-        <h1>Kuhinja Kalkulator</h1>
+        <h1>Kuhinja po meri</h1>
         <span className="loading" />
       </div>
     );
@@ -253,10 +257,14 @@ export default function App() {
     { id: "home" as Page, label: "Početna", icon: Home },
     { id: "kitchen" as Page, label: "Kuhinja", icon: Layers3 },
     { id: "cost" as Page, label: "Cena", icon: SlidersHorizontal },
-    { id: "prices" as Page, label: "Cenovnik", icon: BookOpen },
+    { id: "appearance" as Page, label: "Izgled", icon: Palette },
   ];
   const go = (next: Page) => {
-    if ((next === "kitchen" || next === "cost") && !offer) {
+    setOpenMaterials(false);
+    if (
+      (next === "kitchen" || next === "cost" || next === "appearance") &&
+      !offer
+    ) {
       if (offers.length) {
         setOffer(ensureOpenings(ensureElevation(ensureLayout(offers[0]))));
         setPage(next);
@@ -299,6 +307,7 @@ export default function App() {
           <button
             onClick={() => {
               setDraftSettings({ ...settings });
+              setSettingsTab("general");
               setSettingsOpen(true);
             }}
           >
@@ -313,7 +322,7 @@ export default function App() {
         <header className="app-header">
           <button className="mobile-brand" onClick={() => go("home")}>
             <img src="/brand/logo.png" alt="" />
-            <span>Kuhinja Kalkulator</span>
+            <span>Kuhinja po meri</span>
           </button>
           <div className="header-right">
             {offline && (
@@ -327,6 +336,7 @@ export default function App() {
               aria-label="Podešavanja"
               onClick={() => {
                 setDraftSettings({ ...settings });
+                setSettingsTab("general");
                 setSettingsOpen(true);
               }}
             >
@@ -395,7 +405,7 @@ export default function App() {
           )}
           {page === "cost" && offer && (
             <OfferView
-              key={offer.id}
+              key={offer.id + "-" + openMaterials}
               offer={offer}
               onChange={changeOffer}
               onSave={save}
@@ -403,6 +413,20 @@ export default function App() {
               products={products}
               suppliers={suppliers}
               notify={notify}
+              initialScreen={openMaterials ? "optimize" : "summary"}
+            />
+          )}
+          {page === "appearance" && offer && (
+            <AppearanceView
+              key={offer.id}
+              offer={offer}
+              products={products}
+              onChange={changeOffer}
+              onOpening={() => {
+                setOpenMaterials(true);
+                setPage("cost");
+                window.scrollTo({ top: 0 });
+              }}
             />
           )}
           {page === "offers" && (
@@ -560,186 +584,233 @@ export default function App() {
           wide
           onClose={() => setSettingsOpen(false)}
         >
-          <div className="info-note">
-            <Settings2 size={19} />
-            <span>Podrazumevane vrednosti za nove projekte.</span>
-          </div>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              await db.settings.put({ id: "main", value: draftSettings });
-              await refresh();
-              setSettingsOpen(false);
-              notify("Podešavanja su sačuvana za nove kalkulacije.");
-            }}
+          <div
+            className="settings-tabs choice-buttons"
+            role="tablist"
+            aria-label="Stranice podešavanja"
           >
-            <div className="settings-grid">
-              {(
-                [
-                  {
-                    key: "thickness",
-                    label: "Debljina ploče (mm)",
-                    min: 10,
-                    max: 40,
-                  },
-                  {
-                    key: "backThickness",
-                    label: "Debljina leđa (mm)",
-                    min: 2,
-                    max: 18,
-                  },
-                  { key: "gap", label: "Zazor frontova (mm)", min: 0, max: 10 },
-                  {
-                    key: "clearance",
-                    label: "Razmak klizača po strani (mm)",
-                    min: 1,
-                    max: 40,
-                  },
-                  {
-                    key: "waste",
-                    label: "Tehnološki otpad (%)",
-                    min: 0,
-                    max: 100,
-                  },
-                  {
-                    key: "eurRate",
-                    label: "Ručni kurs EUR / RSD",
-                    min: 1,
-                    max: 1000,
-                  },
-                  { key: "margin", label: "Marža (%)", min: 0, max: 99 },
-                  {
-                    key: "markup",
-                    label: "Procentualna doplata (%)",
-                    min: 0,
-                    max: 500,
-                  },
-                ] as const
-              ).map((x) => (
-                <Field key={x.key} label={x.label}>
-                  <input
-                    required
-                    type="number"
-                    step="0.1"
-                    min={x.min}
-                    max={x.max}
-                    value={draftSettings[x.key]}
+            <button
+              role="tab"
+              aria-selected={settingsTab === "general"}
+              onClick={() => setSettingsTab("general")}
+            >
+              Opšte
+            </button>
+            <button
+              role="tab"
+              aria-selected={settingsTab === "prices"}
+              onClick={() => setSettingsTab("prices")}
+            >
+              Cenovnik
+            </button>
+          </div>
+          {settingsTab === "prices" ? (
+            <div role="tabpanel" aria-label="Cenovnik">
+              <PriceList
+                products={products}
+                suppliers={suppliers}
+                settings={settings}
+                onRefresh={refresh}
+                notify={notify}
+              />
+            </div>
+          ) : (
+            <div role="tabpanel" aria-label="Opšta podešavanja">
+              <div className="info-note">
+                <Settings2 size={19} />
+                <span>Podrazumevane vrednosti za nove projekte.</span>
+              </div>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  await db.settings.put({ id: "main", value: draftSettings });
+                  await refresh();
+                  setSettingsOpen(false);
+                  notify("Podešavanja su sačuvana za nove kalkulacije.");
+                }}
+              >
+                <div className="settings-grid">
+                  {(
+                    [
+                      {
+                        key: "thickness",
+                        label: "Debljina ploče (mm)",
+                        min: 10,
+                        max: 40,
+                      },
+                      {
+                        key: "backThickness",
+                        label: "Debljina leđa (mm)",
+                        min: 2,
+                        max: 18,
+                      },
+                      {
+                        key: "gap",
+                        label: "Zazor frontova (mm)",
+                        min: 0,
+                        max: 10,
+                      },
+                      {
+                        key: "clearance",
+                        label: "Razmak klizača po strani (mm)",
+                        min: 1,
+                        max: 40,
+                      },
+                      {
+                        key: "waste",
+                        label: "Tehnološki otpad (%)",
+                        min: 0,
+                        max: 100,
+                      },
+                      {
+                        key: "eurRate",
+                        label: "Ručni kurs EUR / RSD",
+                        min: 1,
+                        max: 1000,
+                      },
+                      { key: "margin", label: "Marža (%)", min: 0, max: 99 },
+                      {
+                        key: "markup",
+                        label: "Procentualna doplata (%)",
+                        min: 0,
+                        max: 500,
+                      },
+                    ] as const
+                  ).map((x) => (
+                    <Field key={x.key} label={x.label}>
+                      <input
+                        required
+                        type="number"
+                        step="0.1"
+                        min={x.min}
+                        max={x.max}
+                        value={draftSettings[x.key]}
+                        onChange={(e) =>
+                          setDraftSettings({
+                            ...draftSettings,
+                            [x.key]: Number(e.target.value),
+                          })
+                        }
+                      />
+                    </Field>
+                  ))}
+                </div>
+                <Field label="Način formiranja prodajne cene">
+                  <select
+                    value={draftSettings.profitMode}
                     onChange={(e) =>
                       setDraftSettings({
                         ...draftSettings,
-                        [x.key]: Number(e.target.value),
+                        profitMode: e.target.value as Settings["profitMode"],
                       })
                     }
-                  />
+                  >
+                    <option value="margin">Marža: trošak / (1 − marža)</option>
+                    <option value="markup">
+                      Doplata: trošak × (1 + doplata)
+                    </option>
+                  </select>
                 </Field>
-              ))}
-            </div>
-            <Field label="Način formiranja prodajne cene">
-              <select
-                value={draftSettings.profitMode}
-                onChange={(e) =>
-                  setDraftSettings({
-                    ...draftSettings,
-                    profitMode: e.target.value as Settings["profitMode"],
-                  })
-                }
-              >
-                <option value="margin">Marža: trošak / (1 − marža)</option>
-                <option value="markup">Doplata: trošak × (1 + doplata)</option>
-              </select>
-            </Field>
-            <Field label="Način nabavke materijala po tabli">
-              <select
-                value={draftSettings.purchaseMode}
-                onChange={(e) =>
-                  setDraftSettings({
-                    ...draftSettings,
-                    purchaseMode: e.target.value as Settings["purchaseMode"],
-                  })
-                }
-              >
-                <option value="area">Teorijska potrošnja m² sa otpadom</option>
-                <option value="sheets">
-                  Cele table · površinski minimum (bez optimizacije)
-                </option>
-              </select>
-            </Field>
-            <Field label="Kantovanje korpusa">
-              <select
-                value={draftSettings.edgeMode}
-                onChange={(e) =>
-                  setDraftSettings({
-                    ...draftSettings,
-                    edgeMode: e.target.value as Settings["edgeMode"],
-                  })
-                }
-              >
-                <option value="front">Vidljive prednje ivice</option>
-                <option value="all">Sve ivice stranica, dna i krova</option>
-              </select>
-            </Field>
-            <button className="btn primary full" type="submit">
-              Sačuvaj podešavanja za nove ponude
-            </button>
-          </form>
-          <div className="backup-section">
-            <h3>
-              <HardDrive size={19} /> Rezervne kopije
-            </h3>
-            <p>
-              Sačuvajte JSON kopiju pre promene telefona ili brisanja podataka
-              pregledača.
-            </p>
-            <div className="form-actions">
-              <button className="btn secondary" onClick={() => void doBackup()}>
-                <Download size={17} /> Izvezi sve podatke
-              </button>
+                <Field label="Način nabavke materijala po tabli">
+                  <select
+                    value={draftSettings.purchaseMode}
+                    onChange={(e) =>
+                      setDraftSettings({
+                        ...draftSettings,
+                        purchaseMode: e.target
+                          .value as Settings["purchaseMode"],
+                      })
+                    }
+                  >
+                    <option value="area">
+                      Teorijska potrošnja m² sa otpadom
+                    </option>
+                    <option value="sheets">
+                      Cele table · površinski minimum (bez optimizacije)
+                    </option>
+                  </select>
+                </Field>
+                <Field label="Kantovanje korpusa">
+                  <select
+                    value={draftSettings.edgeMode}
+                    onChange={(e) =>
+                      setDraftSettings({
+                        ...draftSettings,
+                        edgeMode: e.target.value as Settings["edgeMode"],
+                      })
+                    }
+                  >
+                    <option value="front">Vidljive prednje ivice</option>
+                    <option value="all">Sve ivice stranica, dna i krova</option>
+                  </select>
+                </Field>
+                <button className="btn primary full" type="submit">
+                  Sačuvaj podešavanja za nove ponude
+                </button>
+              </form>
+              <div className="backup-section">
+                <h3>
+                  <HardDrive size={19} /> Rezervne kopije
+                </h3>
+                <p>
+                  Sačuvajte JSON kopiju pre promene telefona ili brisanja
+                  podataka pregledača.
+                </p>
+                <div className="form-actions">
+                  <button
+                    className="btn secondary"
+                    onClick={() => void doBackup()}
+                  >
+                    <Download size={17} /> Izvezi sve podatke
+                  </button>
+                  <button
+                    className="btn secondary"
+                    onClick={() => backupRef.current?.click()}
+                  >
+                    <Upload size={17} /> Uvezi JSON kopiju
+                  </button>
+                </div>
+                <input
+                  ref={backupRef}
+                  hidden
+                  type="file"
+                  accept=".json"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      setBackup(JSON.parse(await file.text()));
+                    } catch {
+                      notify("JSON fajl nije ispravan.");
+                    }
+                    e.target.value = "";
+                  }}
+                />
+              </div>
+              {installPrompt && (
+                <button
+                  className="btn secondary full"
+                  onClick={async () => {
+                    await (
+                      installPrompt as Event & { prompt: () => Promise<void> }
+                    ).prompt();
+                    setInstallPrompt(null);
+                  }}
+                >
+                  <Download size={17} /> Instaliraj aplikaciju
+                </button>
+              )}
               <button
-                className="btn secondary"
-                onClick={() => backupRef.current?.click()}
+                className="text-btn centered"
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setHelp(true);
+                }}
               >
-                <Upload size={17} /> Uvezi JSON kopiju
+                Kako instalirati na telefon
               </button>
             </div>
-            <input
-              ref={backupRef}
-              hidden
-              type="file"
-              accept=".json"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                try {
-                  setBackup(JSON.parse(await file.text()));
-                } catch {
-                  notify("JSON fajl nije ispravan.");
-                }
-                e.target.value = "";
-              }}
-            />
-          </div>
-          {installPrompt && (
-            <button
-              className="btn secondary full"
-              onClick={async () => {
-                await (
-                  installPrompt as Event & { prompt: () => Promise<void> }
-                ).prompt();
-                setInstallPrompt(null);
-              }}
-            >
-              <Download size={17} /> Instaliraj aplikaciju
-            </button>
           )}
-          <button
-            className="text-btn centered"
-            onClick={() => {
-              setSettingsOpen(false);
-              setHelp(true);
-            }}
-          >
-            Kako instalirati na telefon
-          </button>
         </Modal>
       )}
       {backup && (

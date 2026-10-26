@@ -22,12 +22,18 @@ export async function exampleExcel() {
     sheet.addRow([
       p.code,
       p.name,
+      p.manufacturer,
       categories[p.category],
       p.supplier,
       p.unit,
       p.price,
       p.currency,
+      p.vatRate ?? "",
+      p.discountRate ?? "",
       p.note,
+      p.width ?? "",
+      p.height ?? "",
+      p.depth ?? "",
       p.sheetWidth || "",
       p.sheetHeight || "",
     ]);

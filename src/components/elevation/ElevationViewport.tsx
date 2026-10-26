@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { Minus, Plus, Scan, Settings2, Maximize, X } from "lucide-react";
 import {
   elevationCamera,
+  containedElevationCamera,
   toScreen,
   type ElevationScene,
 } from "../../core/elevation";
@@ -24,6 +25,7 @@ export default function ElevationViewport({
   walls = [],
   onChooseWall,
   focusRequest = 0,
+  onTopView,
 }: {
   scene: ElevationScene;
   scale: number;
@@ -38,6 +40,7 @@ export default function ElevationViewport({
   walls?: KitchenWall[];
   onChooseWall?: (id: string) => void;
   focusRequest?: number;
+  onTopView?: () => void;
 }) {
   const frame = useRef<HTMLDivElement>(null),
     anchor = useRef<{ x: number; y: number; px?: number; py?: number } | null>(
@@ -49,6 +52,7 @@ export default function ElevationViewport({
     [zoom, setZoom] = useState(1),
     [fitRequest, setFitRequest] = useState(0);
   const [showDimensions, setShowDimensions] = useState(false);
+  const [fitAll, setFitAll] = useState(true);
   const [pan, setPan] = useState({ left: 0, top: 0 });
   useLayoutEffect(() => {
     const node = frame.current;
@@ -79,18 +83,43 @@ export default function ElevationViewport({
   useLayoutEffect(() => {
     anchor.current = null;
     setZoom(1);
+    setFitAll(true);
     setFitRequest((n) => n + 1);
   }, [fullscreen]);
-  const fittedCamera = elevationCamera(
+  const normalCamera = elevationCamera(
       scene,
       box.width,
       box.maxHeight,
       zoom,
       fullscreen,
     ),
-    dimensionSpace = showDimensions
-      ? Math.max(0, dimensionChains(scene, fittedCamera.scale).totalY + 20 - 64)
-      : 0,
+    fittedCamera = fitAll
+      ? (() => {
+          let c = containedElevationCamera(
+            scene,
+            box.width,
+            box.maxHeight,
+            52,
+            fullscreen,
+          );
+          for (let i = 0; i < 6; i++)
+            c = containedElevationCamera(
+              scene,
+              box.width,
+              box.maxHeight,
+              showDimensions ? dimensionChains(scene, c.scale).totalY + 20 : 52,
+              fullscreen,
+            );
+          return c;
+        })()
+      : normalCamera,
+    dimensionSpace =
+      !fitAll && showDimensions
+        ? Math.max(
+            0,
+            dimensionChains(scene, fittedCamera.scale).totalY + 20 - 64,
+          )
+        : 0,
     camera = {
       ...fittedCamera,
       canvasHeight: fittedCamera.canvasHeight + dimensionSpace,
@@ -133,6 +162,7 @@ export default function ElevationViewport({
     fitRequest,
   ]);
   useLayoutEffect(() => {
+    if (fitAll) return;
     const node = frame.current,
       entry = focusEntry;
     if (!node || !entry || !focusRequest) return;
@@ -166,8 +196,20 @@ export default function ElevationViewport({
     focusEntry?.rect.width,
     focusEntry?.rect.height,
   ]);
-  const latest = useRef({ camera, scene, zoom });
-  latest.current = { camera, scene, zoom };
+  const latest = useRef({
+    camera,
+    scene,
+    zoom,
+    fitAll,
+    normalFitted: normalCamera.fitted,
+  });
+  latest.current = {
+    camera,
+    scene,
+    zoom,
+    fitAll,
+    normalFitted: normalCamera.fitted,
+  };
   useLayoutEffect(() => {
     const node = frame.current;
     if (!node) return;
@@ -189,7 +231,7 @@ export default function ElevationViewport({
         { camera: c, scene: s, zoom: z } = latest.current;
       pinch = {
         distance: p.distance,
-        zoom: z,
+        zoom: latest.current.fitAll ? c.scale / latest.current.normalFitted : z,
         x: (node.scrollLeft + p.px - c.margin.left) / c.scale,
         y: s.height - (node.scrollTop + p.py - c.margin.top) / c.scale,
       };
@@ -201,9 +243,10 @@ export default function ElevationViewport({
       const p = points(e),
         c = latest.current.camera;
       anchor.current = { x: pinch.x, y: pinch.y, px: p.px, py: p.py };
+      setFitAll(false);
       setZoom(
         Math.max(
-          0.5,
+          0.02,
           Math.min(
             0.65 / c.fitted,
             (pinch.zoom * p.distance) / Math.max(1, pinch.distance),
@@ -238,7 +281,16 @@ export default function ElevationViewport({
           scene.height -
           (node.scrollTop + camera.viewportHeight / 2 - margin.top) / actual,
       };
-    setZoom((z) => Math.max(0.5, Math.min(0.65 / camera.fitted, z * factor)));
+    setFitAll(false);
+    setZoom((z) =>
+      Math.max(
+        0.02,
+        Math.min(
+          0.65 / normalCamera.fitted,
+          (fitAll ? actual / normalCamera.fitted : z) * factor,
+        ),
+      ),
+    );
   }
   const floor = margin.top + scene.height * actual,
     baseTop = margin.top + (scene.height - scene.baseTop) * actual,
@@ -264,7 +316,7 @@ export default function ElevationViewport({
           <button
             className="icon-btn"
             aria-label="Umanji 2D prikaz"
-            disabled={zoom <= 0.5}
+            disabled={actual <= normalCamera.fitted * 0.02}
             onClick={() => zoomBy(1 / 1.3)}
           >
             <Minus size={20} />
@@ -282,6 +334,7 @@ export default function ElevationViewport({
             onClick={() => {
               anchor.current = null;
               setZoom(1);
+              setFitAll(true);
               setFitRequest((n) => n + 1);
             }}
           >
@@ -354,6 +407,11 @@ export default function ElevationViewport({
           )}{" "}
           mm
         </span>
+        {fullscreen && onTopView && (
+          <button className="text-btn" onClick={onTopView}>
+            Odozgo
+          </button>
+        )}
       </div>
       <div
         className="elevation-frame"
@@ -362,7 +420,8 @@ export default function ElevationViewport({
       >
         <div
           ref={frame}
-          className="schematic-scroll elevation-scroll"
+          className={`schematic-scroll elevation-scroll ${fitAll ? "fitted" : ""}`}
+          data-fit-all={fitAll}
           onScroll={(e) =>
             setPan({
               left: e.currentTarget.scrollLeft,

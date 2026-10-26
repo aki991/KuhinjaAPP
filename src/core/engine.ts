@@ -14,7 +14,9 @@ import type {
 export const round = (n: number) =>
   Math.round((n + Number.EPSILON) * 100) / 100;
 export function rsd(p: Product, s: Settings) {
-  return p.price * (p.currency === "EUR" ? s.eurRate : 1);
+  return p.price * (1 - (p.discountRate ?? 0) / 100) *
+    (1 + (p.vatRate ?? 0) / 100) *
+    (p.currency === "EUR" ? s.eurRate : 1);
 }
 export function unitPrice(
   p: Product,
@@ -50,6 +52,15 @@ export function salePrice(cost: number, s: Settings) {
   return s.profitMode === "margin"
     ? cost / (1 - s.margin / 100)
     : cost * (1 + s.markup / 100);
+}
+/** Only a known library type without a construction rule may be stored as an incomplete project. */
+export function onlyUnsupportedErrors(offer: Offer) {
+  const errors = calculateOffer(offer).errors;
+  const known = new Set(offer.elements.flatMap((e) => {
+    const t = templates.find((candidate) => candidate.kind === e.kind);
+    return t?.unsupported ? [`${t.name}: ${t.rule}`] : [];
+  }));
+  return errors.length > 0 && errors.every((error) => known.has(error));
 }
 export function calculate(
   elements: KitchenElement[],
@@ -132,6 +143,10 @@ export function calculateWithContext(
   const results = elements.map((e) => {
     const sel = effectiveSelection(e, global);
     const built = construct(e, sel, s, prices);
+    if (templates.find((t) => t.kind === e.kind)?.unsupported) {
+      errors.push(...built.errors.map((x) => `${templates.find((t) => t.kind === e.kind)?.name}: ${x}`));
+      return { element: e, ...built, materials: 0, hardwareCost: 0, labor: 0, edge: 0, area: 0, cost: 0 };
+    }
     let materials = 0,
       hardwareCost = 0,
       kitLabor = 0,

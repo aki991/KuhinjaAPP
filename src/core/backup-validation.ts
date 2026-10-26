@@ -1,6 +1,7 @@
 import { categories, templates } from "./catalog";
-import { calculateOffer } from "./engine";
+import { calculateOffer, onlyUnsupportedErrors } from "./engine";
 import { validPushRule, validVerticalGolaRule } from "./opening";
+import { validAppearance, validColor } from "./appearance";
 import type { Backup } from "./db";
 import type {
   KitchenElement,
@@ -59,6 +60,12 @@ function validProduct(p: Product) {
     p.category in categories &&
     finite(p.price) &&
     p.price >= 0 &&
+    (p.appearance === undefined || validAppearance(p.appearance)) &&
+    (p.thickness === undefined ||
+      (finite(p.thickness) && p.thickness > 0 && p.thickness <= 100)) &&
+    ([p.width, p.height, p.depth].every((v) => v === undefined || (finite(v) && v > 0 && v <= 6000))) &&
+    (p.vatRate === undefined || (finite(p.vatRate) && p.vatRate >= 0 && p.vatRate <= 100)) &&
+    (p.discountRate === undefined || (finite(p.discountRate) && p.discountRate >= 0 && p.discountRate < 100)) &&
     ["RSD", "EUR"].includes(p.currency) &&
     ["m²", "m", "kom", "komplet", "tabla"].includes(p.unit) &&
     (p.unit !== "tabla" ||
@@ -97,6 +104,17 @@ const validSelection = (s: Selection) =>
   (s.tallOpening === undefined ||
     ["handles", "push", "gola"].includes(s.tallOpening)) &&
   (s.wallHinge === undefined || str(s.wallHinge)) &&
+  (s.frontMode === undefined ||
+    ["body", "separate", "ral"].includes(s.frontMode)) &&
+  (s.ralColor === undefined || validColor(s.ralColor)) &&
+  (s.ralCode === undefined || str(s.ralCode)) &&
+  (s.wallHandle === undefined || str(s.wallHandle)) &&
+  (s.handlePosition === undefined ||
+    ["vertical", "horizontal", "center"].includes(s.handlePosition)) &&
+  (s.worktopThickness === undefined ||
+    (finite(s.worktopThickness) &&
+      s.worktopThickness > 0 &&
+      s.worktopThickness <= 100)) &&
   ["wallPush", "wallLift", "tallPush", "tallHinge", "verticalGola"].every(
     (k) =>
       s[k as keyof Selection] === undefined || str(s[k as keyof Selection]),
@@ -330,6 +348,11 @@ export function validateBackup(data: Backup) {
     throw new Error("Neispravni ili ponovljeni identifikatori.");
   if (
     !data.products.every(validProduct) ||
+    (data.importFormats !== undefined &&
+      (!Array.isArray(data.importFormats) ||
+        !data.importFormats.every((f) => !!f && str(f.supplier) && !!f.supplier &&
+          !!f.mapping && typeof f.mapping === "object" &&
+          Object.values(f.mapping).every(str)))) ||
     !data.offers.every(validOffer) ||
     !data.settings.every((s) => validSettings(s.value)) ||
     !data.suppliers.every(
@@ -344,12 +367,12 @@ export function validateBackup(data: Backup) {
   )
     throw new Error("Rezervna kopija sadrži nevalidne podatke.");
   for (const o of data.offers) {
-    if (calculateOffer(o).errors.length)
+    if (calculateOffer(o).errors.length && !onlyUnsupportedErrors(o))
       throw new Error(
         "Kopija sadrži ponudu sa neispravnom konstrukcijom ili cenovnikom.",
       );
     for (const v of o.variants)
-      if (calculateOffer({ ...o, ...v, variants: [] }).errors.length)
+      if (calculateOffer({ ...o, ...v, variants: [] }).errors.length && !onlyUnsupportedErrors({ ...o, ...v, variants: [] }))
         throw new Error("Kopija sadrži nevalidnu varijantu.");
   }
 }

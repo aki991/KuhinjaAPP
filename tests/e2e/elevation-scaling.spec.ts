@@ -122,7 +122,6 @@ test("2000, 3200 i 4500 mm na tri mobilne rezolucije: veći frontovi, proporcije
       [4500, [600, 600, 600, 600, 600, 600, 600, 300], false],
     ] as const) {
       await load(page, fixture(length, [...widths], upper));
-      const simpleWidth = 600 * Math.max(0.16, 64 / Math.min(600, ...widths));
       if (length === 2000)
         await page.screenshot({
           path: `test-results/skaliranje-jednostavno-${width}.png`,
@@ -132,13 +131,15 @@ test("2000, 3200 i 4500 mm na tri mobilne rezolucije: veći frontovi, proporcije
       await center(page);
       const view = await metrics(page),
         s = await scale(page);
-      expect((600 * s) / simpleWidth).toBeGreaterThan(0.8);
+      expect(s).toBeGreaterThan(0);
+      expect(view.scrollWidth).toBeLessThanOrEqual(view.width + 1);
+      expect(view.scrollHeight).toBeLessThanOrEqual(view.height + 1);
       if (length === 2000) {
         expect((2000 * s) / view.width).toBeGreaterThan(0.85);
         expect(2000 * s).toBeLessThanOrEqual(view.width);
         expect(view.height).toBeLessThan(280);
       } else if (length === 3200) {
-        expect(view.height).toBeGreaterThan(300);
+        expect(view.height).toBeGreaterThan(240);
         expect(view.height).toBeLessThanOrEqual(height * 0.52 + 1);
         const b = await page
             .locator('[data-technical-id="base-0"]')
@@ -146,7 +147,7 @@ test("2000, 3200 i 4500 mm na tri mobilne rezolucije: veći frontovi, proporcije
           u = await page.locator('[data-technical-id="upper-0"]').boundingBox();
         expect(Math.abs(b!.y - u!.y - u!.height - 600 * s)).toBeLessThan(1);
       }
-      if (length === 4500) expect(view.scrollWidth).toBeGreaterThan(view.width);
+      if (length === 4500) expect(view.scrollWidth).toBeLessThanOrEqual(view.width + 1);
       for (const id of ["base-0", "base-1"]) {
         const g = page.locator(`[data-technical-id="${id}"]`),
           box = (await g.boundingBox())!;

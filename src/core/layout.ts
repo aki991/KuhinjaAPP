@@ -9,7 +9,7 @@ import type {
   Offer,
   Placement,
 } from "./types";
-import { uid } from "./catalog";
+import { templates, uid } from "./catalog";
 export const isSpacer = (e: LayoutItem): e is LayoutSpacer =>
   e.kind === "spacer";
 export const rowOf = (e: LayoutItem): LayoutRow =>
@@ -17,11 +17,11 @@ export const rowOf = (e: LayoutItem): LayoutRow =>
     ? e.placement.row === "wall"
       ? "wall"
       : "base"
-    : ["worktop", "side", "plinth", "panel"].includes(e.kind)
+    : ["worktop", "side", "plinth", "panel", "filler"].includes(e.kind)
       ? "extra"
-      : ["wall1", "wall2", "lift", "open"].includes(e.kind)
+      : templates.find((t) => t.kind === e.kind)?.group === "Gornji"
         ? "wall"
-        : ["tall", "fridge", "tallOven"].includes(e.kind)
+        : templates.find((t) => t.kind === e.kind)?.group === "Visoki"
           ? "tall"
           : "base";
 export const laneOf = (e: LayoutItem): LayoutLane =>
@@ -119,7 +119,7 @@ export function ensureLayout<T extends Offer>(offer: T): T {
     legacy = !!next.layout && next.layout.version !== 3;
   next.layout ||= defaultLayout(next.client.layout);
   if (
-    next.elements.some((e) => e.kind === "island") &&
+    next.elements.some((e) => templates.find((t) => t.kind === e.kind)?.group === "Ostrvski") &&
     !next.layout.walls.some((w) => w.id === "island")
   )
     next.layout.walls.push({ id: "island", name: "Ostrvo", length: 3000 });
@@ -135,7 +135,7 @@ export function ensureLayout<T extends Offer>(offer: T): T {
       e.placement = appendPlacement(
         placed,
         e,
-        e.kind === "island" ? "island" : next.layout.activeWall,
+        templates.find((t) => t.kind === e.kind)?.group === "Ostrvski" ? "island" : next.layout.activeWall,
       );
     placed.push(e);
   }

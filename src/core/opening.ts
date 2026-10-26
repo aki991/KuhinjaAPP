@@ -8,6 +8,7 @@ import type {
   KitComponent,
   VerticalGolaRule,
 } from "./types";
+import { selectionMaterials } from "./appearance";
 export const productSelectionKeys: SelectionProductKey[] = [
   "body",
   "front",
@@ -24,21 +25,20 @@ export const productSelectionKeys: SelectionProductKey[] = [
   "push",
 ];
 export const standardWall = (e: KitchenElement) =>
-  e.kind === "wall1" || e.kind === "wall2";
+  ["wall1", "wall2", "wall1Right", "wallGlass1", "wallGlass2", "wallBridgeFridge", "wallBridgeOven"].includes(e.kind);
 export const tallCabinet = (e: KitchenElement) =>
-  ["tall", "fridge", "tallOven"].includes(e.kind);
+  ["tall", "fridge", "tallOven", "tallOne", "tallDrawer", "tallFreezer", "tallOvenMicrowave", "tallCargo", "tallPantry", "tallCombined"].includes(e.kind);
 export const horizontalGolaKinds: KitchenElement["kind"][] = [
   "base1",
+  "base1Right",
   "base2",
   "drawer2",
   "drawer3",
   "drawer4",
   "sink",
+  "sinkOne",
 ];
-export function effectiveSelection(
-  e: KitchenElement,
-  global: Selection,
-): Selection {
+function openingSelection(e: KitchenElement, global: Selection): Selection {
   if (e.locked) return { ...e.selection };
   if (standardWall(e))
     return {
@@ -46,6 +46,7 @@ export function effectiveSelection(
       opening: global.wallOpening ?? "handles",
       hinge: global.wallHinge ?? global.hinge,
       push: global.wallPush ?? global.push,
+      handle: global.wallHandle ?? global.handle,
     };
   if (e.kind === "lift")
     return {
@@ -54,6 +55,7 @@ export function effectiveSelection(
         global.wallOpening === "push" && global.wallLift ? "push" : "handles",
       push: global.wallPush ?? global.push,
       lift: global.wallLift ?? global.lift,
+      handle: global.wallHandle ?? global.handle,
     };
   if (e.kind === "open") return { ...global, opening: "handles" };
   if (tallCabinet(e))
@@ -64,6 +66,12 @@ export function effectiveSelection(
       push: global.tallPush ?? global.push,
     };
   return { ...global };
+}
+export function effectiveSelection(
+  e: KitchenElement,
+  global: Selection,
+): Selection {
+  return selectionMaterials(openingSelection(e, global));
 }
 export const frontOverhang = (e: KitchenElement, s: Selection) =>
   standardWall(e) && s.opening === "overhang" ? (s.frontOverhang ?? 20) : 0;

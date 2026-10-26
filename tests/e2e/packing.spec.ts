@@ -33,7 +33,7 @@ async function fresh(page: Page) {
       .getByRole("button", { name: "Dodaj element", exact: true })
       .click();
     await page
-      .getByRole("button", { name: "Donji sa jednim vratima", exact: true })
+      .getByRole("button", { name: "Jedna vrata — levo", exact: true })
       .click();
     await saveModal(page);
   }
@@ -107,7 +107,7 @@ test("600/600/600 → 600/400/600, brisanje i dodavanje bez praznine", async ({
     .getByRole("button", { name: "Dodaj element", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Donji sa jednim vratima", exact: true })
+    .getByRole("button", { name: "Jedna vrata — levo", exact: true })
     .click();
   await saveModal(page);
   await expect(card(page, "D3")).toHaveAttribute("data-offset", "1200");
@@ -182,8 +182,8 @@ test("telefon: prevlačenje između zidova čuva broj i širine", async ({
 }) => {
   await fresh(page);
   const session = await context.newCDPSession(page),
-    from = await point(card(page, "D2")),
-    tab = await point(page.getByRole("button", { name: "Zid B", exact: true }));
+    tab = await point(page.getByRole("button", { name: "Zid B", exact: true })),
+    from = await point(card(page, "D2"));
   await touch(session, "touchStart", from.x, from.y);
   await page.waitForTimeout(520);
   await slideTouch(page, session, from, tab);
@@ -220,6 +220,8 @@ test("telefon: običan pokret skroluje stranicu i šemu bez aktiviranja prevlač
   await expect(page.getByTestId("drag-ghost")).toHaveCount(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.evaluate(() => window.scrollTo(0, 0));
+  for (let i = 0; i < 3; i++)
+    await page.getByRole("button", { name: "Uvećaj 2D prikaz" }).click();
   const right = await point(card(page, "D3"));
   await touch(session, "touchStart", right.x, right.y);
   await slideTouch(page, session, right, { x: right.x - 170, y: right.y }, 8);

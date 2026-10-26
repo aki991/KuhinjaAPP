@@ -12,7 +12,7 @@ import { TEMPLATE_VERSION } from "./types";
 import { validateBackup } from "./backup-validation";
 import { ensureLayout } from "./layout";
 import { defaultElevation, ensureElevation } from "./elevation";
-import { calculateOffer } from "./engine";
+import { calculateOffer, onlyUnsupportedErrors } from "./engine";
 import { ensureOpenings, upgradeDemoPush } from "./opening";
 export class KitchenDB extends Dexie {
   products!: Table<Product, string>;
@@ -116,6 +116,15 @@ export class KitchenDB extends Dexie {
           await tx
             .table("meta")
             .put({ id: "draft", value: ensureOpenings(draft.value) });
+      });
+    this.version(7)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx.table("templates").put({
+          id: "library-1.1",
+          version: "1.1.0",
+          rules: templates,
+        });
       });
   }
 }
@@ -256,7 +265,7 @@ export async function persistProject(offer: Offer, database = db) {
     async () => {
       await database.meta.put({ id: "draft", value: offer });
       if (
-        !cost.errors.length &&
+        (!cost.errors.length || onlyUnsupportedErrors(offer)) &&
         (cost.count > 0 || (await database.offers.get(offer.id)))
       ) {
         await database.offers.put(offer);
@@ -279,6 +288,9 @@ export async function exportBackup(database = db) {
     settings: await database.settings.toArray(),
     templates: await database.templates.toArray(),
     clients: await database.clients.toArray(),
+    importFormats: (await database.meta.toArray())
+      .filter((row) => row.id.startsWith("import-format:"))
+      .map((row) => row.value as { supplier: string; mapping: Record<string, string> }),
   };
 }
 export type Backup = Awaited<ReturnType<typeof exportBackup>>;
@@ -315,6 +327,9 @@ export async function restoreBackup(data: Backup, database = db) {
       await database.settings.bulkPut(data.settings);
       await database.templates.bulkPut(data.templates);
       await database.clients.bulkPut(data.clients);
+      await database.meta.where("id").startsWith("import-format:").delete();
+      for (const format of data.importFormats ?? [])
+        await database.meta.put({ id: `import-format:${format.supplier.toLowerCase()}`, value: format });
       await database.meta.put({ id: "initialized", value: true });
     },
   );

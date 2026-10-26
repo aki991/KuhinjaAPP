@@ -1,7 +1,16 @@
-import { isSpacer } from "../../core/layout";
+import { isSpacer, rowOf } from "../../core/layout";
 import type { ElevationEntry, Rect } from "../../core/elevation";
 import { ApplianceSVG } from "./ApplianceSVG";
 import { horizontalGolaKinds } from "../../core/opening";
+import { useId, type CSSProperties } from "react";
+import type { ElementKind } from "../../core/types";
+const specialLabel: Partial<Record<ElementKind, string>> = {
+  baseCargo: "CARGO", tallCargo: "CARGO", wallHood: "NAPA",
+  wallCorner: "L", corner: "L", cornerBlind: "SLEPI", bar: "ŠANK",
+  freeFridge: "FRIŽ.", freeStove: "ŠPORET", freeDishwasher: "SUD.",
+  dishwasherBuilt: "SUD.", tallFreezer: "ZAMRZ.", tallOvenMicrowave: "R+M",
+  wallBridgeFridge: "MOST", wallBridgeOven: "MOST", islandBack: "OBLOGA",
+};
 function Door({
   x,
   y,
@@ -12,6 +21,7 @@ function Door({
   glass = false,
   lift = false,
   upper = false,
+  position = "vertical",
 }: {
   x: number;
   y: number;
@@ -22,6 +32,7 @@ function Door({
   glass?: boolean;
   lift?: boolean;
   upper?: boolean;
+  position?: "vertical" | "horizontal" | "center";
 }) {
   const inset = Math.min(4, w * 0.08, h * 0.08);
   return (
@@ -76,6 +87,11 @@ function Door({
             className="technical-handle"
             d={`M${x + w * 0.35} ${y + h - 5}h${w * 0.3}`}
           />
+        ) : position !== "vertical" ? (
+          <path
+            className="technical-handle"
+            d={`M${position === "center" ? x + w * 0.35 : hinge === "left" ? x + w - Math.min(22, w * 0.3) - 4 : x + 4} ${upper ? y + h - inset - 4 : y + inset + 4}h${Math.min(22, w * 0.3)}`}
+          />
         ) : (
           <path
             className="technical-handle"
@@ -100,6 +116,12 @@ export default function ElementSVG({
   clipId?: string;
   thumbnail?: boolean;
 }) {
+  const patternId = useId().replace(/:/g, "");
+  const front = e.finish?.front;
+  const frontPaint =
+    front && (front.image || front.texture !== "solid")
+      ? `url(#finish-${patternId})`
+      : front?.color;
   const { width: w, height: h } = r,
     spacer = isSpacer(e.item),
     handles = e.opening === "handles",
@@ -118,12 +140,17 @@ export default function ElementSVG({
     item!.kind === "worktop" ||
     item!.kind === "plinth" ||
     item!.kind === "panel" ||
-    item!.kind === "side"
+    item!.kind === "side" ||
+    item!.kind === "filler" ||
+    item!.kind === "bar"
   )
     content = (
       <rect
         width={w}
         height={h}
+        className={
+          item!.kind === "worktop" ? "material-worktop" : "material-body"
+        }
         fill={
           item!.kind === "worktop"
             ? "#d7dcdd"
@@ -133,10 +160,10 @@ export default function ElementSVG({
         }
       />
     );
-  else if (item!.kind === "open")
+  else if (item!.kind === "open" || item!.kind === "baseOpen")
     content = (
       <>
-        <rect width={w} height={h} fill="#f5f1e9" />
+        <rect width={w} height={h} fill="#f5f1e9" className="material-body" />
         {Array.from({ length: item!.shelves }, (_, i) => (
           <rect
             key={i}
@@ -155,16 +182,18 @@ export default function ElementSVG({
     );
   else if (item!.drawers > 0) {
     const n = item!.drawers,
-      dh = innerH / n;
+      dh = innerH / n,
+      mixed = item!.doors > 0,
+      drawerWidth = mixed ? innerW * 0.48 : innerW;
     content = (
       <>
-        <rect width={w} height={h} fill="#d9d3c6" />
+        <rect width={w} height={h} fill="#d9d3c6" className="material-body" />
         {Array.from({ length: n }, (_, i) => (
           <g key={i} data-front="drawer">
             <rect
               x={gap}
               y={gap + i * dh}
-              width={innerW}
+              width={drawerWidth}
               height={Math.max(1, dh - gap)}
               fill="#f3e5c8"
               className="front-frame"
@@ -173,7 +202,7 @@ export default function ElementSVG({
               data-front-panel="drawer"
               x={gap + Math.min(3, dh * 0.1)}
               y={gap + i * dh + Math.min(3, dh * 0.1)}
-              width={Math.max(1, innerW - 2 * Math.min(3, dh * 0.1))}
+              width={Math.max(1, drawerWidth - 2 * Math.min(3, dh * 0.1))}
               height={Math.max(1, dh - gap - 2 * Math.min(3, dh * 0.1))}
               fill="#f8edd7"
               className="front-inset"
@@ -181,16 +210,16 @@ export default function ElementSVG({
             {handles && (
               <path
                 className="technical-handle"
-                d={`M${w * 0.37} ${gap + i * dh + Math.min(7, dh * 0.3)}h${w * 0.26}`}
+                d={`M${drawerWidth * 0.37} ${gap + i * dh + Math.min(7, dh * 0.3)}h${drawerWidth * 0.26}`}
               />
             )}
-            <path d={`M${gap} ${gap + i * dh}H${w - gap}`} fill="none" />
+            <path d={`M${gap} ${gap + i * dh}H${drawerWidth + gap}`} fill="none" />
             {gola && (
               <rect
                 data-gola="horizontal"
                 x={gap}
                 y={gap + i * dh}
-                width={innerW}
+                width={drawerWidth}
                 height={Math.max(1.5, h * 0.018)}
                 fill="#9b9f99"
                 stroke="none"
@@ -198,16 +227,18 @@ export default function ElementSVG({
             )}
           </g>
         ))}
+        {mixed && <Door x={gap + drawerWidth} y={gap} width={Math.max(1, innerW - drawerWidth)}
+          height={innerH} hinge="right" handles={handles} />}
       </>
     );
   } else {
-    const tall = ["tall", "tallOven", "fridge"].includes(item!.kind),
+    const tall = rowOf(item!) === "tall",
       oven = e.appliance === "oven",
       count = oven && !tall ? 0 : Math.max(0, item!.doors),
       openingH = oven ? Math.min(h * 0.87, 600 * (h / item!.height)) : 0;
     content = (
       <>
-        <rect width={w} height={h} fill="#f1eadb" />
+        <rect width={w} height={h} fill="#f1eadb" className="material-body" />
         {oven && (
           <g
             transform={`translate(${gap * 2},${tall ? (h - openingH) / 2 : (h - openingH) / 2})`}
@@ -226,9 +257,11 @@ export default function ElementSVG({
                 : innerH +
                   e.frontOverhang * (h / e.rect.height) +
                   (e.frontOverhang > 0 ? gap : 0),
-              fw = tall ? innerW : innerW / count,
-              x = tall ? gap : gap + i * fw,
-              y = tall
+              stackedLift = ["liftDouble", "liftFolding"].includes(item!.kind),
+              actualFh = stackedLift ? innerH / count : fh,
+              fw = tall || stackedLift ? innerW : innerW / count,
+              x = tall || stackedLift ? gap : gap + i * fw,
+              y = stackedLift ? gap + i * actualFh : tall
                 ? gap +
                   i * fh +
                   (oven && i >= Math.ceil(count / 2) ? openingH : 0)
@@ -239,7 +272,7 @@ export default function ElementSVG({
                 x={x}
                 y={y}
                 width={Math.max(1, fw - gap)}
-                height={Math.max(1, fh - (e.frontOverhang > 0 ? 0 : gap))}
+                height={Math.max(1, actualFh - (e.frontOverhang > 0 ? 0 : gap))}
                 hinge={
                   count === 1
                     ? item!.visual?.hinge || "left"
@@ -249,8 +282,9 @@ export default function ElementSVG({
                 }
                 handles={handles}
                 glass={!!item!.visual?.glass}
-                lift={item!.kind === "lift"}
+                lift={["lift", "liftDouble", "liftFolding"].includes(item!.kind)}
                 upper={e.row === "wall"}
+                position={e.handlePosition}
               />
             );
           })}
@@ -277,13 +311,65 @@ export default function ElementSVG({
       data-mm-height={e.rect.height}
       data-front-overhang={e.frontOverhang || undefined}
       data-front-height={e.frontOverhang ? e.frontHeight : undefined}
+      data-front-color={front?.color}
       data-mm-x={e.rect.x}
       data-mm-bottom={e.rect.y}
       className={`technical-element ${spacer ? "layout-spacer" : ""} ${e.conflict ? "conflict" : ""} ${selected ? "selected" : ""} ${dragging ? "dragging" : ""}`}
+      style={
+        {
+          "--front-fill": frontPaint,
+          "--front-color": front?.color,
+          "--body-fill": e.finish?.body.color,
+          "--handle-color": e.finish?.handle.color,
+          "--worktop-fill": e.finish?.worktop.color,
+        } as CSSProperties
+      }
       clipPath={clipId ? `url(#${clipId})` : undefined}
     >
+      {frontPaint?.startsWith("url") && front && (
+        <defs>
+          <pattern
+            id={`finish-${patternId}`}
+            width="1"
+            height="1"
+            patternContentUnits="objectBoundingBox"
+          >
+            <rect width="1" height="1" fill={front.color} />
+            {(front.image || front.texture === "wood") && (
+              <image
+                href={front.image ?? "/brand/wood-light.png"}
+                width="1"
+                height="1"
+                preserveAspectRatio="xMidYMid slice"
+                opacity={front.image ? 1 : 0.35}
+              />
+            )}{" "}
+            {front.texture === "stone" && !front.image && (
+              <path
+                d="M0 .1Q.5 .8 1 .3M0 .8Q.4 .2 1 .9"
+                fill="none"
+                stroke="#fff"
+                strokeWidth=".015"
+                opacity=".3"
+              />
+            )}
+          </pattern>
+        </defs>
+      )}
       <g transform={`translate(${r.x} ${r.y})`}>
         {content}
+      {item && specialLabel[item.kind] && (
+        <g className="technical-special" pointerEvents="none">
+          {(["corner", "cornerBlind", "wallCorner"].includes(item.kind)) &&
+            <path d={`M1 ${h - 1}L${w * 0.34} ${h - 1}L${w * 0.34} ${h * 0.65}L${w - 1} ${h * 0.65}`} fill="none" stroke="#735c43" strokeWidth="1.5" />}
+          {(["baseCargo", "tallCargo"].includes(item.kind)) &&
+            [0.3, 0.5, 0.7].map((v) => <path key={v} d={`M${w * 0.2} ${h * v}h${w * 0.6}`} stroke="#735c43" fill="none" />)}
+          <text x={w / 2} y={h * 0.58} textAnchor="middle" fontSize={Math.max(5, Math.min(14, w * 0.16, h * 0.15))}
+            fill="#5d4733" stroke="white" strokeWidth="1.5" paintOrder="stroke">
+            {specialLabel[item.kind]}
+          </text>
+        </g>
+      )}
         {e.verticalProfile &&
           Array.from({ length: e.verticalProfile.count }, (_, i) => {
             const p = e.verticalProfile!,
