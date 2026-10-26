@@ -1,0 +1,287 @@
+.elevation-toolbar-extra {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.element-strip {
+  margin: 12px 0 10px;
+  min-width: 0;
+}
+.element-strip-filters {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin-bottom: 8px;
+  scrollbar-width: none;
+}
+.element-strip-filters button {
+  flex: none;
+  min-height: 36px;
+  padding: 5px 11px;
+  border: 1px solid #dce5ee;
+  border-radius: 8px;
+  color: #6f8295;
+  background: white;
+  font-size: 14px;
+}
+.element-strip-filters button[aria-pressed="true"] {
+  background: #edf3f9;
+  border-color: #aac0d2;
+  color: #164a75;
+}
+.element-strip-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 2px 1px 6px;
+  position: relative;
+  overscroll-behavior-x: contain;
+}
+.element-strip-card {
+  flex: 0 0 96px;
+  height: 120px;
+  padding: 6px 4px;
+  border: 1px solid #dbe4ed;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  color: #30495f;
+}
+.element-strip-card.selected {
+  border: 2px solid #285a91;
+  background: #f1f6fb;
+  padding: 5px 3px;
+}
+.strip-code {
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 18px;
+}
+.strip-code small,
+.element-strip-card strong small {
+  font-size: 14px;
+  font-weight: 400;
+}
+.element-strip-card strong {
+  font-size: 16px;
+  line-height: 20px;
+}
+.element-miniature {
+  display: block;
+  flex: none;
+  pointer-events: none;
+  overflow: visible;
+}
+.element-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.element-editor-actions button {
+  min-height: 44px;
+  padding: 5px 9px;
+  border: 1px solid #dce5ee;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  background: #f8fafc;
+  color: #426580;
+}
+.kitchen-fullscreen-open .app-header,
+.kitchen-fullscreen-open .bottom-nav,
+.kitchen-fullscreen-open .desktop-sidebar {
+  display: none !important;
+}
+.kitchen-fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  max-width: none !important;
+  height: 100dvh !important;
+  margin: 0 !important;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left) !important;
+  background: #fff;
+  z-index: 200;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.kitchen-fullscreen::backdrop {
+  background: #fff;
+}
+.kitchen-fullscreen > .kitchen-worktop {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  transition: none;
+}
+.kitchen-fullscreen .project-heading,
+.kitchen-fullscreen .wall-tabs,
+.kitchen-fullscreen .wall-measure,
+.kitchen-fullscreen .element-strip,
+.kitchen-fullscreen .add-kitchen-element,
+.kitchen-fullscreen > .kitchen-empty,
+.kitchen-fullscreen > .disclosure {
+  display: none;
+}
+.kitchen-fullscreen .layout-warning {
+  position: absolute;
+  bottom: 0;
+  left: 35px;
+  right: 15px;
+  z-index: 5;
+  font-size: 14px;
+  margin: 0;
+  padding: 5px 8px;
+  pointer-events: none;
+}
+.kitchen-fullscreen .elevation-view {
+  height: 100%;
+  position: relative;
+  border: 0;
+  border-radius: 0;
+  background: white;
+  overflow: hidden;
+}
+.kitchen-fullscreen .elevation-toolbar {
+  position: absolute;
+  z-index: 6;
+  top: 6px;
+  left: 8px;
+  right: 8px;
+  gap: 4px;
+  padding: 2px 5px;
+  border: 1px solid #e1e7ec;
+  border-radius: 10px;
+  background: #fffffff2;
+  box-shadow: 0 2px 9px #26486610;
+}
+.kitchen-fullscreen .elevation-toolbar > div {
+  gap: 1px;
+}
+.kitchen-fullscreen .elevation-hint,
+.kitchen-fullscreen .elevation-warnings {
+  display: none;
+}
+.fullscreen-wall-select {
+  min-width: 72px;
+  max-width: 115px;
+  min-height: 44px;
+  padding: 4px 5px;
+  border: 0;
+  background: transparent;
+  color: #315570;
+  font-size: 16px;
+}
+.fullscreen-rotate-hint {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 5;
+  margin: 0;
+  padding: 6px 9px;
+  font-size: 14px;
+  color: #73879b;
+  background: #fffffff0;
+  border-radius: 8px;
+  pointer-events: none;
+}
+.kitchen-fullscreen .elevation-drop-caption {
+  padding: 0;
+  line-height: 20px;
+}
+.kitchen-fullscreen .modal-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+}
+.kitchen-fullscreen .sheet {
+  max-height: calc(100dvh - 12px);
+  width: min(100%, 540px);
+}
+.kitchen-fullscreen .sheet-body {
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+.kitchen-fullscreen .editor-drawing {
+  display: none;
+}
+.kitchen-fullscreen .layout-drag-ghost {
+  z-index: 40;
+  max-width: 130px;
+  padding: 6px;
+}
+.kitchen-fullscreen .drag-status {
+  z-index: 35;
+  bottom: 6px;
+  left: auto;
+  right: 8px;
+  font-size: 14px;
+  padding: 5px 8px;
+  max-width: 70%;
+  transform: none;
+}
+@media (orientation: landscape) and (min-width: 700px) {
+  .kitchen-fullscreen.has-element-editor > .kitchen-worktop {
+    width: 60%;
+  }
+  .kitchen-fullscreen .modal-backdrop {
+    background: transparent;
+    backdrop-filter: none;
+    pointer-events: none;
+    display: block;
+  }
+  .kitchen-fullscreen .sheet {
+    position: absolute;
+    pointer-events: auto;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: 40%;
+    max-width: 45%;
+    height: 100%;
+    max-height: 100%;
+    margin: 0;
+    border-radius: 0;
+    border-left: 1px solid #dbe3eb;
+    display: flex;
+    flex-direction: column;
+  }
+  .kitchen-fullscreen .sheet-handle {
+    display: none;
+  }
+  .kitchen-fullscreen .sheet-header {
+    min-height: 54px;
+    padding: 7px 12px;
+    flex-shrink: 0;
+  }
+  .kitchen-fullscreen .sheet-header h2 {
+    font-size: 18px;
+  }
+  .kitchen-fullscreen .sheet-body {
+    overflow: auto;
+    padding: 12px;
+    flex: 1;
+  }
+  .kitchen-fullscreen .dimension-fields {
+    gap: 6px;
+  }
+  .kitchen-fullscreen .dimension-fields input {
+    font-size: 22px;
+    padding: 8px 4px;
+  }
+  .kitchen-fullscreen .element-editor-actions {
+    gap: 4px;
+  }
+  .kitchen-fullscreen .element-editor-actions button {
+    padding: 4px 5px;
+  }
+}

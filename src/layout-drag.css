@@ -1,0 +1,89 @@
+.wall-measure.over-capacity {
+  border-color: #d09882;
+}
+
+.drop-marker {
+  position: absolute;
+  top: -4px;
+  bottom: -2px;
+  width: 4px;
+  border-radius: 3px;
+  background: #164a75;
+  box-shadow: 0 0 0 2px #fff;
+  z-index: 5;
+  pointer-events: none;
+}
+.drop-marker:before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  width: 14px;
+  height: 10px;
+  border-radius: 3px;
+  background: inherit;
+}
+.drop-marker.invalid {
+  background: #b6634d;
+}
+.layout-drag-ghost {
+  position: fixed;
+  z-index: 180;
+  pointer-events: none;
+  background: #164a75;
+  color: white;
+  border: 2px solid #fff;
+  border-radius: 9px;
+  box-shadow: 0 5px 22px #17334c35;
+  padding: 10px 12px;
+  transform: rotate(2deg);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.layout-drag-ghost > span {
+  font-size: 14px;
+}
+.layout-drag-ghost > strong {
+  font-size: 22px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.layout-drag-ghost.invalid {
+  background: #a8644e;
+}
+.drag-status {
+  position: fixed;
+  z-index: 175;
+  left: 16px;
+  right: 16px;
+  bottom: calc(89px + env(safe-area-inset-bottom));
+  background: #164a75;
+  color: #fff;
+  padding: 12px 15px;
+  border-radius: 9px;
+  font-size: 14px;
+  line-height: 1.6;
+  pointer-events: none;
+  box-shadow: 0 4px 20px #18344d1c;
+}
+.drag-status.invalid {
+  background: #a8644e;
+}
+.layout-dragging,
+.layout-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+@media (min-width: 761px) {
+  .drag-status {
+    left: calc(50% + 112px);
+    right: auto;
+    transform: translateX(-50%);
+    max-width: 500px;
+    width: max-content;
+    bottom: 25px;
+  }
+}
