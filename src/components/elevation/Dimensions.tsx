@@ -1,4 +1,30 @@
 import { number } from "../UI";
+import type { ElevationScene } from "../../core/elevation";
+/** Reserve separate label lanes when short fronts cannot fit readable dimensions. */
+export function dimensionChains(scene: ElevationScene, scale: number) {
+  const chain = (row: "base" | "wall") => {
+    const ends: number[] = [],
+      offsets = new Map<string, number>();
+    const entries = scene.entries
+      .filter((e) => e.row === row)
+      .sort((a, b) => a.rect.x - b.rect.x);
+    for (const e of entries) {
+      const center = (e.rect.x + e.rect.width / 2) * scale,
+        half = number(e.rect.width).length * 4 + 4;
+      let lane = ends.findIndex((end) => end + 5 <= center - half);
+      if (lane < 0) lane = ends.length;
+      ends[lane] = center + half;
+      offsets.set(e.key, lane * 22);
+    }
+    return { offsets, height: ends.length * 22 };
+  };
+  const base = chain("base"),
+    wall = chain("wall"),
+    baseY = 48,
+    wallY = baseY + base.height + (base.height ? 18 : 0),
+    totalY = wall.height ? wallY + wall.height + 18 : baseY + base.height + 18;
+  return { base, wall, baseY, wallY, totalY };
+}
 export function WidthDimension({
   x,
   y,

@@ -12,14 +12,14 @@ export function ApplianceSVG({
   if (kind === "oven")
     return (
       <g data-appliance="oven" className="appliance-lines">
-        <rect width={w} height={h} rx={1.5} fill="#e6e7e5" />
+        <rect width={w} height={h} rx={1.5} fill="#eee9da" />
         <rect
           x={w * 0.09}
           y={h * 0.24}
           width={w * 0.82}
           height={h * 0.63}
           rx={1.5}
-          fill="#d5dde0"
+          fill="#2c332d"
         />
         <path d={`M${w * 0.12} ${h * 0.19}H${w * 0.88}`} strokeWidth="2" />
         {[0.18, 0.82].map((x) => (
@@ -28,7 +28,7 @@ export function ApplianceSVG({
             cx={w * x}
             cy={h * 0.105}
             r={Math.max(1, w * 0.035)}
-            fill="#d3d7d7"
+            fill="#f5f1e6"
           />
         ))}
         <rect
@@ -37,7 +37,7 @@ export function ApplianceSVG({
           width={w * 0.22}
           height={h * 0.065}
           rx={1}
-          fill="#819095"
+          fill="#3b3f35"
           stroke="none"
         />
         <path
@@ -49,11 +49,42 @@ export function ApplianceSVG({
   if (kind === "fridge")
     return (
       <g data-appliance="fridge" className="appliance-lines">
-        <rect width={w} height={h} fill="#efeee8" />
+        <rect width={w} height={h} fill="#f3e5c8" />
+        {[
+          { y: 0, height: h * 0.6, label: "FRIŽIDER" },
+          { y: h * 0.6, height: h * 0.4, label: "ZAMRZIVAČ" },
+        ].map((part, i) => (
+          <g key={i}>
+            <rect
+              data-front-panel="fridge"
+              x={3}
+              y={part.y + 3}
+              width={Math.max(1, w - 6)}
+              height={Math.max(1, part.height - 6)}
+              fill="#f8edd7"
+              className="front-inset"
+            />
+            <path
+              d={`M${w - 4} ${part.y + 4}L4 ${part.y + part.height / 2}L${w - 4} ${part.y + part.height - 4}`}
+              className="door-opening"
+              fill="none"
+            />
+            {w >= 95 && h >= 140 && (
+              <text
+                className="appliance-label"
+                x={w / 2}
+                y={part.y + part.height * 0.53}
+                textAnchor="middle"
+              >
+                {part.label}
+              </text>
+            )}
+          </g>
+        ))}
         <path d={`M0 ${h * 0.6}H${w}`} />
         {handles && (
           <path
-            d={`M${w * 0.16} ${h * 0.44}v${h * 0.1}M${w * 0.16} ${h * 0.66}v${h * 0.1}`}
+            d={`M${w * 0.88} ${h * 0.44}v${h * 0.1}M${w * 0.88} ${h * 0.66}v${h * 0.1}`}
             strokeWidth="2"
             strokeLinecap="round"
           />
@@ -62,13 +93,13 @@ export function ApplianceSVG({
     );
   return (
     <g data-appliance="dishwasher" className="appliance-lines">
-      <rect width={w} height={h} fill="#eee9dc" />
+      <rect width={w} height={h} fill="#eae9e1" />
       <rect
         x={1}
         y={1}
         width={Math.max(1, w - 2)}
         height={h * 0.12}
-        fill="#e0e4e4"
+        fill="#e0ded3"
       />
       {[0.16, 0.24, 0.32].map((x) => (
         <circle

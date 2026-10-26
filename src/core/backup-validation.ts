@@ -1,5 +1,6 @@
 import { categories, templates } from "./catalog";
 import { calculateOffer } from "./engine";
+import { validPushRule, validVerticalGolaRule } from "./opening";
 import type { Backup } from "./db";
 import type {
   KitchenElement,
@@ -65,7 +66,12 @@ function validProduct(p: Product) {
         !!p.sheetHeight &&
         p.sheetWidth > 0 &&
         p.sheetHeight > 0)) &&
-    (p.processing === undefined || (finite(p.processing) && p.processing >= 0))
+    (p.processing === undefined ||
+      (finite(p.processing) && p.processing >= 0)) &&
+    (p.pushRule === undefined ||
+      (p.category === "push" && validPushRule(p.pushRule))) &&
+    (p.verticalGolaRule === undefined ||
+      (p.category === "gola" && validVerticalGolaRule(p.verticalGolaRule)))
   );
 }
 const validSelection = (s: Selection) =>
@@ -85,7 +91,20 @@ const validSelection = (s: Selection) =>
     "golaEnd",
     "push",
   ].every((k) => str(s[k as keyof Selection])) &&
-  ["handles", "gola", "push"].includes(s.opening);
+  ["handles", "gola", "push", "overhang"].includes(s.opening) &&
+  (s.wallOpening === undefined ||
+    ["handles", "push", "overhang"].includes(s.wallOpening)) &&
+  (s.tallOpening === undefined ||
+    ["handles", "push", "gola"].includes(s.tallOpening)) &&
+  (s.wallHinge === undefined || str(s.wallHinge)) &&
+  ["wallPush", "wallLift", "tallPush", "tallHinge", "verticalGola"].every(
+    (k) =>
+      s[k as keyof Selection] === undefined || str(s[k as keyof Selection]),
+  ) &&
+  (s.frontOverhang === undefined ||
+    (Number.isInteger(s.frontOverhang) &&
+      s.frontOverhang >= 1 &&
+      s.frontOverhang <= 100));
 function validElement(e: KitchenElement) {
   return (
     !!e &&

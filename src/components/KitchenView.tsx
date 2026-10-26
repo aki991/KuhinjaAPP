@@ -29,7 +29,7 @@ import {
   wallUsage,
   span,
 } from "../core/layout";
-import type { LayoutItem, LayoutLane, Offer } from "../core/types";
+import type { LayoutItem, LayoutLane, Offer, Product } from "../core/types";
 import useKitchenFullscreen from "./useKitchenFullscreen";
 import ElementStrip from "./elevation/ElementStrip";
 import { elevationScene } from "../core/elevation";
@@ -93,7 +93,7 @@ export default function KitchenView({
     setDragNotice("");
     change({ layout: { ...layout, activeWall: id } });
   };
-  function saveItem(item: LayoutItem) {
+  function saveItem(item: LayoutItem, prices?: Product[]) {
     const nextElements = isSpacer(item)
       ? offer.elements
       : offer.elements.some((e) => e.id === item.id)
@@ -118,6 +118,7 @@ export default function KitchenView({
     if (result)
       change({
         ...result,
+        ...(prices ? { prices } : {}),
         layout: { ...result.layout, activeWall: item.placement!.wall },
       });
     setSelected(item.id);

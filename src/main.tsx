@@ -4,8 +4,11 @@ import App from "./App";
 import "./styles.css";
 import "./elevation.css";
 import "./kitchen-fullscreen.css";
+import "./opening.css";
 import "./kitchen-actions.css";
-import './layout-drag.css';
+import "./layout-drag.css";
+import "./wood-theme.css";
+import "./elevation-detail.css";
 import { registerSW } from "virtual:pwa-register";
 registerSW({
   onOfflineReady() {

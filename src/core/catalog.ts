@@ -7,6 +7,7 @@ import type {
   Settings,
   Tier,
 } from "./types";
+import { demoPushRule } from "./opening";
 // randomUUID requires HTTPS; getRandomValues also works on local HTTP over Wi-Fi.
 export const uid = () =>
   typeof crypto.randomUUID === "function"
@@ -105,7 +106,9 @@ export const demoPrices: Product[] = [
   ]),
   p("handle", "Ručka • Crna mat 160", "handle", "kom", 380),
   p("leg", "Podesiva nogica 100 mm", "leg", "kom", 110),
-  p("push", "Push-to-open mehanizam", "push", "kom", 620),
+  p("push", "Push-to-open mehanizam", "push", "kom", 620, {
+    pushRule: demoPushRule(),
+  }),
   p("gola", "GOLA horizontalni profil", "gola", "m", 1900),
   p("gola-end", "Završetak GOLA profila", "golaEnd", "kom", 350),
   p("other", "Spojni okov • demo", "other", "kom", 90),

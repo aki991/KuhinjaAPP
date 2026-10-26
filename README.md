@@ -4,6 +4,12 @@ Mobilna aplikacija za stolare: sastavljanje kuhinje, konstrukcioni obračun, tre
 
 **Demo obračun — proveriti konstrukciju pre proizvodnje. Sve početne cene su izmišljeni primeri, a ne tržišne ponude.**
 
+## Drveni vizuelni identitet
+
+Izgled prati dostavljenu referencu „Vaše kuhinje“: svetla drvena pozadina i kartice, tamna drvena navigacija i primarna dugmad, fotografija poslednjeg projekta i stolarski amblem. Priložene originalne slike nalaze se u `public/brand/`; tema za sve ekrane i dijaloge je u `src/wood-theme.css`. Tehnički crtež zadržava svetlu, čitljivu podlogu i istu geometriju. Nazivi projekata, brojevi elemenata i sačuvane ponude prikazuju stvarne lokalne podatke. „Prikaži sve“ otvara postojeću pretragu ponuda.
+
+Logo, teksture i sve fotografije deo su lokalnog PWA keša. Novi ikona/boje manifest-a usklađeni su sa temom. Provereni su telefon 360×800, 390×844 i 430×932, desktop, dijalozi, fullscreen, funkcije kalkulatora i offline učitavanje svih vizuelnih resursa. Snimci su u `test-results/drveni-*.png`; svi postojeći testovi su zadržani.
+
 ## Pokretanje
 
 Potreban je Node.js 22.12+ (provereno sa Node.js 24).
@@ -44,7 +50,7 @@ Osnovni tekst i kontrole imaju 16 px ili više; naslovi su 24–28 px, dimenzije
 
 ### Zidovi, pozicije i migracija
 
-- IndexedDB koristi **verziju 4**, sa istim tabelama. Pripadnost zidu i redu (`placement.wall`, `placement.row`) i redosled (`placement.order`) čuvaju se u ponudi, radnoj kopiji i varijantama. `offset` je samo izvedeni podatak za kompatibilnost: svaki put se ponovo računa iz redosleda i širina. Cenovnici, cene, klijenti, dimenzije, izbori i ID-jevi ormara se ne brišu i ne menjaju.
+- IndexedDB koristi **verziju 6**, sa istim tabelama. Pripadnost zidu i redu (`placement.wall`, `placement.row`) i redosled (`placement.order`) čuvaju se u ponudi, radnoj kopiji i varijantama. `offset` je samo izvedeni podatak za kompatibilnost: svaki put se ponovo računa iz redosleda i širina. Cenovnici, cene, klijenti, dimenzije, izbori i ID-jevi ormara se ne brišu i ne menjaju.
 - Verzija konstrukcionih pravila ostaje **1.0.0**. `engine.ts`, `construction.ts` i `catalog.ts` nisu menjani redizajnom. Regresioni testovi potvrđuju iste iznose.
 - Stari projekti nisu imali podatke o stvarnim zidovima. Prvi raspored zato prati sačuvani redosled na zidu A, odvojeno za donji i viseći red. Dužina A prilagodi se postojećem nizu. To je početni raspored za pregled; majstor treba da dodeli stvarne zidove i izmerene dužine.
 - Prava kuhinja počinje zidom A; L dodaje B, U dodaje B/C. Ostrvo je posebna grupa. Zidovi A/B/C i ostrvo mogu se dodati i ručno. Dužina svakog zida se posebno menja dodirom njegove mere.
@@ -60,7 +66,11 @@ Osnovni tekst i kontrole imaju 16 px ili više; naslovi su 24–28 px, dimenzije
 
 Sekcija **Kuhinja** odmah otvara jedinstveni 2D SVG prikaz. Jednostavni prikaz i prekidač režima su uklonjeni; raniji projekti i podešavanja baze ostaju sačuvani. Zidovi A/B/C i ostrvo imaju zasebne elevacije, uz zajedničke funkcije `packLayout` i `relocateItem`.
 
-Frontovi, vrata, broj fioka, aparati, namerni razmaci, nogice, radne ploče, sokle i obloge crtaju se u zajedničkoj razmeri. Kote su u mm; tekst ostaje 14 px pri zumiranju. Za sitnije detalje koristite **+**, **−** i **Uklopi**, a crtež pomerajte prstom. Dodirom elementa ili njegove kartice otvara se postojeći editor. **Levo / Desno / Dupliraj / Pomeri / Obriši** dostupni su u editoru. Dugi pritisak pokreće prevlačenje, a običan pokret pomera crtež.
+Frontovi, vrata, broj fioka, aparati, namerni razmaci, zona sokle/nogica, radne ploče i obloge crtaju se u zajedničkoj razmeri. Frontovi imaju unutrašnji okvir i oznaku otvaranja; rerna tamno staklo, prozor izražen ram i refleksije, a frižider oznake odeljaka kada raspoloživa veličina dozvoljava čitljiv tekst. Isti renderer koristi se za pojedinačne kartice ispod crteža. Oznake elemenata su iznad visećih i ispod donjih; prostor iznad aparata i namerni razmaci ostaju stvarni podaci projekta.
+
+Dugme **Kote** uključuje/isključuje detaljne dimenzije u mm. Ukupna širina zida ostaje prikazana i u čistom pregledu. Kote donjeg i visećeg reda su na odvojenim linijama ispod kuhinje; kratki segmenti dobijaju dodatne redove da se brojevi ne preklapaju. Tekst ostaje 14 px pri zumiranju. Uključivanje kota dodaje potreban prostor ispod crteža bez promene skale, pozicija, cene ili baze. Za sitnije detalje koristite **+**, **−** i **Uklopi**, a crtež pomerajte prstom. Dodirom elementa ili njegove kartice otvara se postojeći editor. **Levo / Desno / Dupliraj / Pomeri / Obriši** dostupni su u editoru. Dugi pritisak pokreće prevlačenje, a običan pokret pomera crtež. Razmaci su vidljivi u karticama i pri izboru/prevlačenju; u čistom pregledu ne prekrivaju prozor ili druge objekte.
+
+Provereni su novi frontovi i aparati, Kote na 360/390/430 px, odvojene dimenzione linije, izmena širine uz trenutno ažuriranje kota i fullscreen prikaz. Snimci: `test-results/detaljan-pregled.png`, `test-results/detaljan-pregled-kote.png`, `test-results/detaljni-elementi.png`.
 
 Automatski kadar koristi okvir kuhinjskih elemenata i raspoloživu širinu. Visina prostorije i udaljeni prozori/prepreke ne utiču na skalu kuhinje. Donji elementi bez visećih imaju kompaktan kontejner; oba reda i visoki ormari koriste više visine, do razumne granice mobilnog ekrana. Dugi nizovi zadržavaju čitljive frontove uz horizontalno pomeranje. **Uklopi** vraća kadar na kuhinju, a zumiranje čuva centar pogleda. Puna prostorija i objekti ostaju dostupni pomeranjem; kota ukupne visine je vidljiva uz oznaku prekida kada deo zida izlazi iz kadra. Stvarne dimenzije, raspored i sačuvani podaci ostaju isti.
 
@@ -134,7 +144,31 @@ Izvor pravila je `src/core/catalog.ts`; svaka bibliotečka stavka ima svoj opis.
 
 ### Ograničeni GOLA model
 
-Samo standardni donji elementi sa vratima i fiokari. Zaseban profil po elementu i redu fioke, dužina širina/1000; dva završetka po profilu; zasebne konstrukcione letve 60 mm; gornji zazor 30 mm. Nema vertikalnih profila, uglova ni kontinualnih spojeva. Viseće/visoke/sudoperske elemente zaključajte na ručkama pre globalnog GOLA izbora; nepodržana kombinacija blokira čuvanje i PDF.
+Horizontalni model podržava standardne donje elemente, element za sudoperu i fiokare: zaseban profil po elementu i redu fioke, dužina širina/1000; dva završetka po profilu; konstrukcione letve 60 mm; gornji zazor 30 mm. Sudopera ima jedan profil preko širine korpusa, bez ručki, uz zadržane izostavljene police/leđa za instalacije. Uglovi i kontinualni spojevi nisu podržani. **Otvaranje donjih**, **Otvaranje visećih** i **Otvaranje visokih** imaju nezavisne izbore. Individualno zaključani izbori ostaju prioritetni.
+
+Običan visoki ormar podržava **Vertikalnu GOLA** kada konkretan artikal kategorije GOLA, sa jedinicom `m`, ima `verticalGolaRule`. Pravilo definiše izvor/model, broj profila, odstupanje od vrha/dna korpusa, suženje fronta po profilu, najveće dimenzije korpusa, ID završetka, broj završetaka po profilu i komponente. Dužina jednog profila je `(visina korpusa − odstupanje od vrha − odstupanje od dna)/1000`, a količina elemenata množi sve delove. Front se sužava prema pravilu, bez promene korpusa; ručke se uklanjaju, a 2D prikazuje vertikalni profil. Nosači/dodaci mogu se računati po profilu, vratima, šarki ili elementu.
+
+Ne postoji univerzalno demo pravilo ni nova izmišljena cena za vertikalnu GOLA. Artikal i dokumentacija konkretnog modela podešavaju se u cenovniku ili kroz **Podesi profil** u projektu. Aparatni i kombinovani elementi (uključujući običan ormar sa prikazanim ugrađenim aparatom) ne nasleđuju potvrdu običnog ormara: ostaju nepotpuni i mogu dobiti individualne ručke. Nepodržana konstrukcija ili nedostajući delovi blokiraju validnu ponudu/PDF.
+
+### Viseći frontovi i push pravila
+
+Standardni viseći sa jednom/dve grupe vrata podržavaju **Ručke / Push / Prepušteni front**. Globalna promena ne menja donje elemente. Podizni i otvoreni elementi ne preuzimaju neprovereno pravilo; podizni zadržavaju ručke, a otvoreni ostaju bez frontova. Individualna ručka, okov i prepust čuvaju se uz „Zadrži moj izbor“.
+
+Prepust je stvarni izlazak donje ivice fronta ispod korpusa: `visina fronta = visina korpusa − gornji zazor + prepust`. Uz korpus 720 mm, zazor 2 mm i prepust 20 mm front je 738 mm. Raspon je 1–100 mm. Korpus ostaje isti, nema ručki ni push mehanizama; površina i obim fronta preračunavaju se jednom. Broj šarki prati novu visinu fronta. SVG i njegove kartice prikazuju stvarni prepust, a projekat proverava prostor prema donjim/visokim elementima, ploči i evidentiranim preprekama. Ovo je provera elevacije, bez rešavanja sudara u dubini.
+
+Push front ostaje standardnih dimenzija. Artikal ima eksplicitni `pushRule`: količinu po vratima, podržane konstrukcije, potvrđene ID-jeve šarki/podiznih mehanizama, granice širine/visine fronta i najmanji zazor. Opcioni `hingesPerDoor` zamenjuje demo pravilo broja šarki; za Silent sistem obavezni su taj broj i izvor dokumentacije. `components` povezuje konkretne artikle nosača, dodataka i dodatnog rada sa količinom po vratima, šarki ili elementu. Push artikal može biti `kom` ili `komplet`; stare šarke/ručke ne dodaju se uz novi komplet. Dodatni rad pripada trošku rada, ostale komponente okovima. Cena, valuta i kurs ostaju iz snimka cenovnika.
+
+Pri nekompatibilnom izboru otvara se **Izaberite Push sistem**. Klasični i Silent kompleti pojavljuju se samo ako svi relevantni elementi prolaze konstrukciona pravila i postoje konkretni artikli. Predlog prikazuje mehanizam, šarke, dodatke i njihove cene; tek **Potvrdi izbor** menja okov. Odustajanje čuva prethodni izbor, uključujući premium šarke. **Podesi komplet** omogućava unos pravila i odabir konkretnih kompatibilnih šarki. Izmena pravila unutar projekta čuva se u njegovom snimku cenovnika; cenovnik na zasebnoj stranici uređuje se nezavisno. Kratke greške uz oznaku/naziv elementa imaju dugme **Reši**. Nepoznate kombinacije ostaju **Nepotpun obračun**. Ne zaključuje se kompatibilnost iz proizvođača, naziva ili cenovne klase.
+
+Podizni front traži zasebno eksplicitno pravilo sa tačnim ID-jem podiznog mehanizma; individualni izbor nudi samo takve komplete. Obični visoki ormari zahtevaju posebno uključenu konstrukciju u pravilu. Aparatni elementi ne nasleđuju standardni Push. Globalni viseći zadržavaju ručke na podiznim elementima dok poseban sistem nije izabran. Globalne promene ne utiču na zaključane elemente ili otvaranje donjih.
+
+Postojeći izmišljeni demo push artikal podržava standardne viseće i običan visoki ormar: 1 komad po vratima, osnovne demo šarke, granice pojedinačnog fronta 800 × 1600 mm i zazor najmanje 2 mm. Broj šarki prati visinu svakog fronta; korpus, frontovi i materijal ostaju isti. Izbor kompleta za visoki ormar ne menja viseće ili donje. To je definisano demo pravilo, bez tvrdnje o stvarnom proizvodu. Za pravi model unesite potvrđene podatke proizvođača. Različite push izvedbe imaju različite uslove za šarke i zatvaranje; referenca: [Blum TIP-ON za vrata](https://www.blum.com/us/en/products/motion-technologies/tip-on-doors/overview/).
+
+Referenca za buduća potvrđena Silent pravila je [Hettich katalog Push to open](https://www.hettich.com/fileadmin/Media_Center/Catalogue/Push_to_open_for_hinges.pdf): konkretni Silent modeli, šarke, dimenzije i težina vrata određuju kompatibilnost. Aplikacija ne ubacuje Hettich/Blum cene niti automatski označava njihove proizvode kompatibilnim. Pravila i njihove granice mora potvrditi korisnik prema dokumentaciji izabranog modela.
+
+IndexedDB **v4 → v5** dodaje nezavisne izbore i poznato demo pravilo uz očuvanje cena, korpusa, redosleda, ID-jeva i individualnih snimaka. Nepoznati modeli ne dobijaju pretpostavljenu kompatibilnost. Izbori se čuvaju u projektu, radnoj kopiji, varijantama i JSON kopiji.
+
+Migracija **v5 → v6** dodaje običan visoki ormar samo neizmenjenom prethodnom demo Push pravilu, uključujući cenovnik, projekte, radnu kopiju i varijante. Cene i izbori ostaju isti; korisnička pravila i artikli drugih proizvođača ne menjaju se. Provere sada obuhvataju **129 pojedinačnih testova i 47 E2E scenarija**, uključujući Push visokog ormara + GOLA sudopere, precizne količine, 2D i ponovno otvaranje projekta.
 
 ### Uvoz cenovnika
 
@@ -158,7 +192,7 @@ Duplikat unutar fajla je greška. Postojeća **šifra + dobavljač** ažurira is
 
 ## Provera
 
-Provere obuhvataju **97 pojedinačnih testova i 32 E2E scenarija**: geometriju i proporcije 2D prikaza, vrste frontova/aparata, GOLA/push, otvore i sudare, migracije v2/v3 baze, radnu kopiju, varijante, JSON i identičan obračun posle vizuelnih izmena. Skaliranje je provereno za zidove 2.000 / 3.200 / 4.500 mm, visoke elemente i različite visine prostorija, bez promene veličine kuhinje zbog udaljenih prepreka. Snimci su u `test-results/skaliranje-*.png`. Posebno je potvrđen primer 600/600/600 → 600/400/600: treći element se pomera sa 1.200 na 1.000 mm u zajedničkom prikazu i sačuvanim podacima, bez praznine. Provereno je i prevlačenje na prekratak zid, sa upozorenjem pre i posle ispuštanja i nepromenjenom širinom.
+Provere obuhvataju **129 pojedinačnih testova i 47 E2E scenarija**: geometriju i proporcije 2D prikaza, vrste frontova/aparata, GOLA/push, otvore i sudare, migracije v2/v3/v5 baze, radnu kopiju, varijante, JSON i identičan obračun posle vizuelnih izmena. Novi testovi pokrivaju vertikalne profile/završetke/nosače, tačnu zamenu šarki, Silent komponente i dodatni rad, posebne podizne modele, nepodržane aparatne kombinacije, potvrdu/odustajanje, podešavanje kompleta/profila, zaključane izbore i ponovno otvaranje. Snimci: `test-results/push-komplet-*.png`, `test-results/vertikalna-gola-390.png` i `test-results/sudopera-gola-visoki-push-390.png`. Skaliranje je provereno za zidove 2.000 / 3.200 / 4.500 mm, visoke elemente i različite visine prostorija, bez promene veličine kuhinje zbog udaljenih prepreka. Snimci su u `test-results/skaliranje-*.png`. Posebno je potvrđen primer 600/600/600 → 600/400/600: treći element se pomera sa 1.200 na 1.000 mm u zajedničkom prikazu i sačuvanim podacima, bez praznine. Provereno je i prevlačenje na prekratak zid, sa upozorenjem pre i posle ispuštanja i nepromenjenom širinom.
 
 Dodirni testovi koriste Chromium CDP `Input.dispatchTouchEvent`, a ne samo simulirane DOM događaje: provereni su dugi pritisak, prevlačenje, promena zida, premeštanje razmaka između redova i normalno vertikalno/horizontalno skrolovanje. Fizički Android uređaj nije bio priključen. Mobilne rezolucije ostaju **360×800, 390×844 i 430×932**. Sačuvane su provere obračuna, uvoza, PDF-a i offline rada. Snimci osnovnog 2D prikaza i scenarija su u `test-results/2d-*.png`, a ranijeg prevlačenja i prekoračenja u `test-results/slaganje-*.png`.
 

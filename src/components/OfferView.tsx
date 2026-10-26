@@ -15,8 +15,11 @@ import {
   FileText,
 } from "lucide-react";
 import { categories, findProduct, templates, uid } from "../core/catalog";
-import { calculate, calculateOffer, repriceOffer, rsd } from "../core/engine";
-import { displayProject, ensureLayout } from "../core/layout";
+import { calculateOffer, repriceOffer, rsd } from "../core/engine";
+import { displayProject, ensureLayout, elementCodes } from "../core/layout";
+import { effectiveSelection, standardWall, tallCabinet } from "../core/opening";
+import { construct } from "../core/construction";
+import { pushSelection } from "../core/opening-kits";
 import { exportPDF } from "../core/files";
 import type {
   Category,
@@ -26,8 +29,13 @@ import type {
   Supplier,
   Tier,
   Variant,
+  SelectionProductKey,
 } from "../core/types";
 import QuoteSettings from "./QuoteSettings";
+import OpeningChoices from "./OpeningChoices";
+import PushSystemDialog from "./PushSystemDialog";
+import VerticalGolaSelect from "./VerticalGolaSelect";
+import ElementEditor from "./ElementEditor";
 import { Cabinet, Field, Modal, money, number } from "./UI";
 type CostGroup =
   "material" | "hardware" | "labor" | "assembly" | "transport" | "profit";
@@ -66,6 +74,45 @@ export default function OfferView({
     [costGroup, setCostGroup] = useState<CostGroup | null>(null);
   const c = useMemo(() => calculateOffer(offer), [offer]),
     preferred = suppliers.find((s) => s.isDefault)?.name;
+  const [pushTarget, setPushTarget] = useState<
+      "wall" | "tall" | { id: string } | null
+    >(null),
+    [repair, setRepair] = useState<string | null>(null);
+  const groupElements = (group: "wall" | "tall") =>
+    offer.elements.filter(
+      (e) => !e.locked && (group === "wall" ? standardWall(e) : tallCabinet(e)),
+    );
+  const choosePush = (group: "wall" | "tall") => {
+    const relevant = groupElements(group);
+    if (
+      !relevant.length ||
+      relevant.every(
+        (e) =>
+          !construct(
+            e,
+            { ...effectiveSelection(e, offer.selection), opening: "push" },
+            offer.settings,
+            offer.prices,
+          ).errors.length,
+      )
+    )
+      change({
+        selection: {
+          ...offer.selection,
+          [group === "wall" ? "wallOpening" : "tallOpening"]: "push",
+        },
+      });
+    else setPushTarget(group);
+  };
+  const repairElement = offer.elements.find((e) => e.id === repair);
+  const pushElements = pushTarget
+    ? typeof pushTarget === "string"
+      ? groupElements(pushTarget)
+      : offer.elements.filter((e) => e.id === pushTarget.id)
+    : [];
+  const pushBase = pushElements[0]
+    ? effectiveSelection(pushElements[0], offer.selection)
+    : offer.selection;
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [screen]);
@@ -75,7 +122,7 @@ export default function OfferView({
     onChange({ ...offer, ...patch, updatedAt: new Date().toISOString() });
   };
   const selectModel = (
-    key: keyof Selection,
+    key: SelectionProductKey,
     category: Category,
     tier?: Tier,
     kind?: string,
@@ -86,7 +133,7 @@ export default function OfferView({
         change({ selection: { ...offer.selection, [key]: p.id } });
     } else notify("Nema aktivnog modela za ovaj izbor.");
   };
-  const models = (key: keyof Selection, category: Category) => {
+  const models = (key: SelectionProductKey, category: Category) => {
     const selected = product(offer.selection[key]),
       choices = offer.prices.filter(
         (p) =>
@@ -120,7 +167,7 @@ export default function OfferView({
       .filter((v): v is Variant => !!v)
       .map((v) => ({
         v,
-        c: calculate(v.elements, v.selection, v.prices, v.settings),
+        c: calculateOffer({ ...offer, ...v, variants: [] }),
       })),
     detailResult = c.elements.find((r) => r.element.id === detail),
     recalc = reprice ? calculateOffer(repriceOffer(offer, products)) : null;
@@ -205,10 +252,58 @@ export default function OfferView({
         {priceHeader}
       </div>
       {c.errors.length > 0 && (
-        <div className="error-note" role="alert">
-          {c.errors.map((x, i) => (
-            <p key={i}>{x}</p>
-          ))}
+        <div className="opening-problems" role="alert">
+          {c.elements
+            .filter((r) => r.errors.length)
+            .map((r) => (
+              <div className="opening-problem" key={r.element.id}>
+                <span>
+                  <strong>
+                    {elementCodes(offer.elements, offer.layout).get(
+                      r.element.id,
+                    )}{" "}
+                    · {templates.find((t) => t.kind === r.element.kind)?.name}
+                  </strong>
+                  <small>{r.errors[0]}</small>
+                  {r.errors.length > 1 && (
+                    <details>
+                      <summary>Još {r.errors.length - 1}</summary>
+                      {r.errors.slice(1).map((s, i) => (
+                        <small key={i}>{s}</small>
+                      ))}
+                    </details>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  className="btn secondary small"
+                  onClick={() => {
+                    if (
+                      effectiveSelection(r.element, offer.selection).opening ===
+                      "push"
+                    )
+                      setPushTarget(
+                        !r.element.locked && standardWall(r.element)
+                          ? "wall"
+                          : !r.element.locked && tallCabinet(r.element)
+                            ? "tall"
+                            : { id: r.element.id },
+                      );
+                    else setRepair(r.element.id);
+                  }}
+                >
+                  Reši
+                </button>
+              </div>
+            ))}
+          {c.errors
+            .filter(
+              (x) =>
+                !c.elements.some((r) => r.errors.some((s) => x.includes(s))),
+            )
+            .map((x, i) => (
+              <p key={i}>{x}</p>
+            ))}
         </div>
       )}
       {screen === "summary" && (
@@ -343,22 +438,137 @@ export default function OfferView({
                 )}
               </div>
             </fieldset>
-            <fieldset>
-              <legend>Otvaranje</legend>
-              <div className="choice-buttons">
-                {(["handles", "gola", "push"] as const).map((opening, i) => (
+            <OpeningChoices
+              label="Otvaranje donjih"
+              value={offer.selection.opening}
+              options={["handles", "gola", "push"]}
+              onChange={(opening) =>
+                change({
+                  selection: {
+                    ...offer.selection,
+                    opening,
+                    wallOpening: offer.selection.wallOpening ?? "handles",
+                    tallOpening:
+                      offer.selection.tallOpening ??
+                      (offer.selection.opening === "overhang"
+                        ? "handles"
+                        : offer.selection.opening),
+                  },
+                })
+              }
+            />
+            {
+              <>
+                <OpeningChoices
+                  label="Otvaranje visećih"
+                  value={offer.selection.wallOpening ?? "handles"}
+                  options={["handles", "push", "overhang"]}
+                  onChange={(wallOpening) =>
+                    wallOpening === "push"
+                      ? choosePush("wall")
+                      : change({
+                          selection: {
+                            ...offer.selection,
+                            wallOpening: wallOpening as
+                              "handles" | "push" | "overhang",
+                          },
+                        })
+                  }
+                  extension={offer.selection.frontOverhang ?? 20}
+                  onExtension={(frontOverhang) =>
+                    change({ selection: { ...offer.selection, frontOverhang } })
+                  }
+                />
+                {offer.selection.wallOpening === "push" && (
+                  <Field label="Šarke visećih">
+                    <select
+                      value={offer.selection.wallHinge ?? offer.selection.hinge}
+                      onChange={(e) =>
+                        change({
+                          selection: {
+                            ...offer.selection,
+                            wallHinge: e.target.value,
+                          },
+                        })
+                      }
+                    >
+                      {offer.prices
+                        .filter(
+                          (p) =>
+                            p.category === "hinge" &&
+                            (p.active ||
+                              p.id ===
+                                (offer.selection.wallHinge ??
+                                  offer.selection.hinge)),
+                        )
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} · {p.supplier}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                )}
+                {offer.selection.wallOpening === "push" && (
                   <button
-                    key={opening}
-                    aria-pressed={offer.selection.opening === opening}
-                    onClick={() =>
-                      change({ selection: { ...offer.selection, opening } })
-                    }
+                    type="button"
+                    className="text-btn"
+                    onClick={() => setPushTarget("wall")}
                   >
-                    {["Ručke", "GOLA", "Push"][i]}
+                    Push komplet visećih
                   </button>
-                ))}
-              </div>
-            </fieldset>
+                )}
+                {offer.selection.wallOpening !== "handles" &&
+                  !offer.selection.wallLift &&
+                  offer.elements.some(
+                    (e) => e.kind === "lift" && !e.locked,
+                  ) && (
+                    <small className="opening-compatible-note">
+                      Podizni elementi zadržavaju ručke.
+                    </small>
+                  )}
+              </>
+            }
+            {
+              <OpeningChoices
+                label="Otvaranje visokih"
+                value={offer.selection.tallOpening ?? offer.selection.opening}
+                vertical
+                options={["handles", "gola", "push"]}
+                onChange={(tallOpening) =>
+                  tallOpening === "push"
+                    ? choosePush("tall")
+                    : change({
+                        selection: {
+                          ...offer.selection,
+                          tallOpening: tallOpening as
+                            "handles" | "push" | "gola",
+                        },
+                      })
+                }
+              />
+            }
+            {offer.selection.tallOpening === "gola" && (
+              <VerticalGolaSelect
+                value={offer.selection.verticalGola}
+                products={offer.prices}
+                onChange={(verticalGola, prices) =>
+                  change({
+                    prices,
+                    selection: { ...offer.selection, verticalGola },
+                  })
+                }
+              />
+            )}
+            {offer.selection.tallOpening === "push" && (
+              <button
+                type="button"
+                className="text-btn"
+                onClick={() => setPushTarget("tall")}
+              >
+                Push komplet visokih
+              </button>
+            )}
           </div>
           {offer.elements.some((e) => e.locked) && (
             <p className="individual-note">
@@ -396,6 +606,7 @@ export default function OfferView({
             <button
               className="btn secondary full"
               onClick={() => setVariantModal(true)}
+              disabled={c.errors.length > 0}
             >
               <Plus size={20} /> Sačuvaj varijantu
             </button>
@@ -420,8 +631,7 @@ export default function OfferView({
                     <strong>{v.name}</strong>
                     <small>
                       {money(
-                        calculate(v.elements, v.selection, v.prices, v.settings)
-                          .total,
+                        calculateOffer({ ...offer, ...v, variants: [] }).total,
                       )}
                     </small>
                   </span>
@@ -515,6 +725,67 @@ export default function OfferView({
             <p key={i}>{x}</p>
           ))}
         </details>
+      )}
+      {pushTarget && (
+        <PushSystemDialog
+          elements={pushElements}
+          selection={pushBase}
+          products={offer.prices}
+          settings={offer.settings}
+          onClose={() => setPushTarget(null)}
+          onConfirm={(kit, prices) => {
+            if (typeof pushTarget === "string") {
+              const wall = pushTarget === "wall";
+              change({
+                prices,
+                selection: {
+                  ...offer.selection,
+                  [wall ? "wallOpening" : "tallOpening"]: "push",
+                  [wall ? "wallPush" : "tallPush"]: kit.mechanism.id,
+                  [wall ? "wallHinge" : "tallHinge"]:
+                    kit.hinge?.id ?? pushBase.hinge,
+                  ...(wall ? { wallLift: kit.lift?.id } : {}),
+                },
+              });
+            } else
+              change({
+                prices,
+                elements: offer.elements.map((e) =>
+                  e.id === pushTarget.id
+                    ? {
+                        ...e,
+                        locked: true,
+                        selection: pushSelection(
+                          effectiveSelection(e, offer.selection),
+                          kit,
+                        ),
+                      }
+                    : e,
+                ),
+              });
+            setPushTarget(null);
+          }}
+        />
+      )}
+      {repairElement && (
+        <ElementEditor
+          element={repairElement}
+          products={offer.prices}
+          global={offer.selection}
+          settings={offer.settings}
+          walls={offer.layout?.walls}
+          layout={offer.layout}
+          elements={offer.elements}
+          onClose={() => setRepair(null)}
+          onSave={(element, prices) =>
+            change({
+              prices: prices ?? offer.prices,
+              elements: offer.elements.map((e) =>
+                e.id === element.id ? element : e,
+              ),
+            })
+          }
+        />
       )}
       {quoteSettings && (
         <QuoteSettings
@@ -671,7 +942,7 @@ export default function OfferView({
           </Field>
           <button
             className="btn primary full"
-            disabled={!variantName.trim()}
+            disabled={!variantName.trim() || c.errors.length > 0}
             onClick={() => {
               onChange({
                 ...offer,
@@ -724,21 +995,24 @@ export default function OfferView({
             {comparisons.map(({ v, c }, i) => (
               <div key={i}>
                 <h3>{v.name}</h3>
-                <strong>{money(c.total)}</strong>
+                <strong>
+                  {c.errors.length ? "Nepotpun obračun" : money(c.total)}
+                </strong>
                 <p>{c.count} elemenata</p>
               </div>
             ))}
           </div>
-          {comparisons.length === 2 && (
-            <p className="comparison-difference">
-              Razlika ukupne cene:{" "}
-              <strong>
-                {money(
-                  Math.abs(comparisons[0].c.total - comparisons[1].c.total),
-                )}
-              </strong>
-            </p>
-          )}
+          {comparisons.length === 2 &&
+            comparisons.every((v) => !v.c.errors.length) && (
+              <p className="comparison-difference">
+                Razlika ukupne cene:{" "}
+                <strong>
+                  {money(
+                    Math.abs(comparisons[0].c.total - comparisons[1].c.total),
+                  )}
+                </strong>
+              </p>
+            )}
         </Modal>
       )}
       {reprice && recalc && (

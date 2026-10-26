@@ -284,7 +284,7 @@ test("mobilni ekrani 360×800, 390×844 i 430×932: bez prelivanja i sitnih kont
     ).toBe(true);
     await capture(page, `optimizacija-${width}`);
     const opening = await page
-      .getByRole("group", { name: "Otvaranje", exact: true })
+      .getByRole("group", { name: "Otvaranje donjih", exact: true })
       .getByRole("button", { name: "Ručke", exact: true })
       .boundingBox();
     const navigation = await page.locator(".bottom-nav").boundingBox();

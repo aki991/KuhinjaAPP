@@ -1,4 +1,7 @@
 import { construct } from "./construction";
+import { templates } from "./catalog";
+import { effectiveSelection } from "./opening";
+import { elevationScene, intersects } from "./elevation";
 import type {
   Calculation,
   KitchenElement,
@@ -34,9 +37,11 @@ export function unitPrice(
     expected === "piece" &&
     (["slide", "lift"].includes(p.category)
       ? p.unit === "komplet"
-      : ["hinge", "handle", "leg", "push", "golaEnd"].includes(p.category)
-        ? p.unit === "kom"
-        : p.unit === "kom" || p.unit === "komplet")
+      : p.category === "push"
+        ? ["kom", "komplet"].includes(p.unit)
+        : ["hinge", "handle", "leg", "golaEnd"].includes(p.category)
+          ? p.unit === "kom"
+          : p.unit === "kom" || p.unit === "komplet")
   )
     return price;
   throw new Error(`Neodgovarajuća jedinica za ${p.name}: ${p.unit}.`);
@@ -51,6 +56,15 @@ export function calculate(
   global: Selection,
   prices: Product[],
   s: Settings,
+): Calculation {
+  return calculateWithContext(elements, global, prices, s);
+}
+export function calculateWithContext(
+  elements: KitchenElement[],
+  global: Selection,
+  prices: Product[],
+  s: Settings,
+  context?: Pick<Offer, "layout" | "elevation">,
 ): Calculation {
   const usage = new Map<string, Usage>();
   const errors: string[] = [],
@@ -116,10 +130,11 @@ export function calculate(
     }
   };
   const results = elements.map((e) => {
-    const sel = e.locked ? e.selection : global;
-    const built = construct(e, sel, s);
+    const sel = effectiveSelection(e, global);
+    const built = construct(e, sel, s, prices);
     let materials = 0,
       hardwareCost = 0,
+      kitLabor = 0,
       edge = 0,
       area = 0;
     for (const p of built.panels) {
@@ -131,20 +146,28 @@ export function calculate(
     materials += consume(sel.edge, edge, "m", edge);
     for (const hw of built.hardware) {
       const p = prices.find((p) => p.id === hw.product);
-      hardwareCost += consume(
+      const amount = consume(
         hw.product,
         hw.quantity * e.quantity,
         p?.unit === "m" ? "m" : "piece",
       );
+      if (p?.category === "labor") kitLabor += amount;
+      else hardwareCost += amount;
     }
     const labor =
+      kitLabor +
       (built.panels.reduce((sum, p) => sum + p.quantity, 0) *
         work("labor-cut", s.cutPrice) +
         work("labor-build", s.laborPerElement) +
         e.extra) *
         e.quantity +
       edge * work("labor-edge", s.edgeLabor);
-    errors.push(...built.errors.map((x) => `${e.kind}: ${x}`));
+    errors.push(
+      ...built.errors.map(
+        (x) =>
+          `${templates.find((t) => t.kind === e.kind)?.name ?? "Element"}: ${x}`,
+      ),
+    );
     warnings.push(...built.warnings);
     return {
       element: e,
@@ -157,6 +180,50 @@ export function calculate(
       cost: materials + hardwareCost + labor,
     };
   });
+  if (context?.layout) {
+    for (const wall of context.layout.walls) {
+      const scene = elevationScene(
+        {
+          ...context,
+          elements,
+          selection: global,
+          prices,
+          settings: s,
+        } as Offer,
+        wall.id,
+      );
+      for (const e of scene.entries.filter((e) => e.frontOverhang > 0)) {
+        const strip = {
+          x: e.rect.x,
+          y: e.rect.y - e.frontOverhang,
+          width: e.rect.width,
+          height: e.frontOverhang,
+        };
+        const blocked =
+          strip.y < 0 ||
+          scene.entries.some(
+            (other) =>
+              other.id !== e.id &&
+              other.row !== "wall" &&
+              other.item.kind !== "spacer" &&
+              intersects(strip, other.rect),
+          ) ||
+          scene.objects.some((o) =>
+            intersects(strip, {
+              x: o.x,
+              y: o.bottom,
+              width: o.width,
+              height: o.height,
+            }),
+          );
+        if (blocked) {
+          const message = `Prepušteni front ${e.code}: nema dovoljno slobodnog prostora ispod korpusa.`;
+          errors.push(message);
+          results.find((r) => r.element.id === e.id)?.errors.push(message);
+        }
+      }
+    }
+  }
   let boardExtra = 0;
   for (const u of usage.values())
     if (u.product.unit === "tabla") {
@@ -220,7 +287,7 @@ export function calculate(
   };
 }
 export const calculateOffer = (o: Offer) =>
-  calculate(o.elements, o.selection, o.prices, o.settings);
+  calculateWithContext(o.elements, o.selection, o.prices, o.settings, o);
 export function repriceOffer(
   o: Offer,
   prices: Product[],

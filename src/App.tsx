@@ -39,12 +39,13 @@ import type {
   Settings,
   Supplier,
 } from "./core/types";
-import { Cabinet, Field, Modal } from "./components/UI";
+import { Field, Modal } from "./components/UI";
 import OfferView from "./components/OfferView";
 import PriceList from "./components/PriceList";
 import KitchenView from "./components/KitchenView";
 import { defaultLayout, displayProject, ensureLayout } from "./core/layout";
 import { ensureElevation } from "./core/elevation";
+import { ensureOpenings, productSelectionKeys } from "./core/opening";
 type Page = "home" | "kitchen" | "cost" | "offers" | "prices";
 export default function App() {
   const [page, setPage] = useState<Page>("home"),
@@ -92,7 +93,9 @@ export default function App() {
       .then(async () => {
         const draft = await db.meta.get("draft");
         if (draft?.value) {
-          setOffer(ensureElevation(ensureLayout(draft.value as Offer)));
+          setOffer(
+            ensureOpenings(ensureElevation(ensureLayout(draft.value as Offer))),
+          );
         }
         setReady(true);
       })
@@ -112,7 +115,7 @@ export default function App() {
     };
   }, []);
   function changeOffer(next: Offer) {
-    const normalized = ensureElevation(ensureLayout(next));
+    const normalized = ensureOpenings(ensureElevation(ensureLayout(next)));
     setOffer(normalized);
     void persistProject(normalized)
       .then((saved) => {
@@ -164,8 +167,7 @@ export default function App() {
     o.prices = structuredClone(products);
     o.settings = { ...settings };
     const selected = { ...defaultSelection };
-    for (const key of Object.keys(selected) as (keyof Selection)[]) {
-      if (key === "opening") continue;
+    for (const key of productSelectionKeys) {
       const old = products.find((p) => p.id === selected[key]);
       const p = findProduct(
         products,
@@ -198,7 +200,16 @@ export default function App() {
     <article className="project-card" key={o.id}>
       <button className="project-open" onClick={() => open(o)}>
         <span className="project-thumb">
-          <Cabinet kind="base2" size={45} />
+          <img
+            src={
+              offers.findIndex((project) => project.id === o.id) % 2 === 0
+                ? "/brand/kitchen-light.png"
+                : "/brand/kitchen-walnut.png"
+            }
+            alt=""
+            width="70"
+            height="70"
+          />
         </span>
         <span>
           <strong>{displayProject(o.client.project)}</strong>
@@ -233,7 +244,7 @@ export default function App() {
   if (!ready)
     return (
       <div className="startup">
-        <img src="/icon.svg" width="58" alt="" />
+        <img src="/brand/logo.png" width="58" alt="" />
         <h1>Kuhinja Kalkulator</h1>
         <span className="loading" />
       </div>
@@ -247,7 +258,7 @@ export default function App() {
   const go = (next: Page) => {
     if ((next === "kitchen" || next === "cost") && !offer) {
       if (offers.length) {
-        setOffer(ensureElevation(ensureLayout(offers[0])));
+        setOffer(ensureOpenings(ensureElevation(ensureLayout(offers[0]))));
         setPage(next);
       } else startNew();
     } else setPage(next);
@@ -266,7 +277,7 @@ export default function App() {
             go("home");
           }}
         >
-          <img src="/icon.svg" alt="" />
+          <img src="/brand/logo.png" alt="" />
           <span>
             Kuhinja<strong>Kalkulator</strong>
           </span>
@@ -301,7 +312,7 @@ export default function App() {
       <div className="main-shell">
         <header className="app-header">
           <button className="mobile-brand" onClick={() => go("home")}>
-            <img src="/icon.svg" alt="" />
+            <img src="/brand/logo.png" alt="" />
             <span>Kuhinja Kalkulator</span>
           </button>
           <div className="header-right">
@@ -324,7 +335,7 @@ export default function App() {
           </div>
         </header>
         <main
-          className={`page-content ${page === "kitchen" ? "kitchen-page" : ""}`}
+          className={`page-content page-${page} ${page === "kitchen" ? "kitchen-page" : ""}`}
         >
           {page === "home" && (
             <div className="home-view">
@@ -333,22 +344,32 @@ export default function App() {
                 className="btn primary full new-kitchen"
                 onClick={startNew}
               >
-                <Plus size={23} /> Nova kuhinja
+                <Plus size={23} /> Nova kuhinja{" "}
+                <ChevronRight
+                  className="new-kitchen-arrow"
+                  size={22}
+                  aria-hidden="true"
+                />
               </button>
               {last && (
                 <button className="continue-project" onClick={() => open(last)}>
                   <span>
                     <small>Nastavi poslednji projekat</small>
                     <strong>{displayProject(last.client.project)}</strong>
-                    <span>
+                    <span className="continue-action">
                       Otvori kuhinju <ArrowRight size={19} />
                     </span>
                   </span>
-                  <Cabinet kind="base2" size={83} />
                 </button>
               )}
               <div className="section-row">
                 <h2>Poslednji projekti</h2>
+                <button
+                  className="text-btn show-projects"
+                  onClick={() => go("offers")}
+                >
+                  Prikaži sve <ChevronRight size={18} />
+                </button>
               </div>
               <div className="project-list">
                 {recent.map((o) => projectCard(o))}

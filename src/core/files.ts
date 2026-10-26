@@ -5,6 +5,7 @@ import { calculateOffer } from "./engine";
 import { categories, demoPrices, templates } from "./catalog";
 import { columns } from "./importer";
 import type { Offer } from "./types";
+import { effectiveSelection } from "./opening";
 export function download(data: BlobPart, name: string, type: string) {
   const url = URL.createObjectURL(new Blob([data], { type }));
   const a = document.createElement("a");
@@ -132,7 +133,7 @@ export async function exportPDF(o: Offer) {
   );
   y += 4;
   for (const e of o.elements) {
-    const sel = e.locked ? e.selection : o.selection,
+    const sel = effectiveSelection(e, o.selection),
       front = o.prices.find((p) => p.id === sel.front)?.name || "",
       body = o.prices.find((p) => p.id === sel.body)?.name || "";
     line(
@@ -155,7 +156,7 @@ export async function exportPDF(o: Offer) {
       line(`Korpus: ${body}.${hasFront ? ` Front: ${front}.` : ""}`, 9);
       if (e.locked)
         line(
-          `Individualni izbor: ${e.drawers ? modelName(sel.slide) : modelName(sel.hinge)}; ${sel.opening === "handles" ? "ručke" : sel.opening === "push" ? "push-to-open" : "GOLA"}.`,
+          `Individualni izbor: ${e.drawers ? modelName(sel.slide) : modelName(sel.hinge)}; ${sel.opening === "handles" ? "ručke" : sel.opening === "push" ? "push-to-open" : sel.opening === "overhang" ? `prepušteni front ${sel.frontOverhang ?? 20} mm` : "GOLA"}.`,
           8,
         );
     }

@@ -33,13 +33,48 @@ export interface Product {
   sheetWidth?: number;
   sheetHeight?: number;
   processing?: number;
+  pushRule?: PushRule;
+  verticalGolaRule?: VerticalGolaRule;
+}
+export interface KitComponent {
+  product: string;
+  quantity: number;
+  basis: "door" | "hinge" | "cabinet" | "profile";
+}
+export interface VerticalGolaRule {
+  source: string;
+  profiles: number;
+  top: number;
+  bottom: number;
+  frontInset: number;
+  maxHeight: number;
+  maxWidth: number;
+  end: string;
+  ends: number;
+  components: KitComponent[];
+}
+export interface PushRule {
+  system?: "classic" | "silent";
+  source?: string;
+  components?: KitComponent[];
+  hingesPerDoor?: number;
+  lifts?: string[];
+  perDoor: number;
+  hinges: string[];
+  kinds: ("wall1" | "wall2" | "lift" | "tall")[];
+  maxHeight: number;
+  maxWidth: number;
+  minGap: number;
+  minHeight?: number;
+  minWidth?: number;
 }
 export interface Supplier {
   id: string;
   name: string;
   isDefault: boolean;
 }
-export type Opening = "handles" | "gola" | "push";
+export type Opening = "handles" | "gola" | "push" | "overhang";
+export type WallOpening = "handles" | "push" | "overhang";
 export interface Selection {
   body: string;
   front: string;
@@ -55,7 +90,30 @@ export interface Selection {
   golaEnd: string;
   push: string;
   opening: Opening;
+  wallOpening?: WallOpening;
+  tallOpening?: Exclude<Opening, "overhang">;
+  frontOverhang?: number;
+  wallHinge?: string;
+  wallPush?: string;
+  wallLift?: string;
+  tallHinge?: string;
+  tallPush?: string;
+  verticalGola?: string;
 }
+export type SelectionProductKey =
+  | "body"
+  | "front"
+  | "back"
+  | "edge"
+  | "worktop"
+  | "hinge"
+  | "slide"
+  | "lift"
+  | "handle"
+  | "leg"
+  | "gola"
+  | "golaEnd"
+  | "push";
 export type ElementKind =
   | "base1"
   | "base2"

@@ -23,6 +23,9 @@ import {
 import { exampleExcel, readExcel } from "../core/files";
 import type { Category, Product, Settings, Supplier } from "../core/types";
 import { Field, IconBox, Modal, money, SectionHeading } from "./UI";
+import PushRuleEditor from "./PushRuleEditor";
+import VerticalGolaRuleEditor from "./VerticalGolaRuleEditor";
+import { validPushRule, validVerticalGolaRule } from "../core/opening";
 export default function PriceList({
   products,
   suppliers,
@@ -75,6 +78,16 @@ export default function PriceList({
   }
   async function saveProduct() {
     if (!edit) return;
+    if (
+      (edit.verticalGolaRule &&
+        !validVerticalGolaRule(edit.verticalGolaRule)) ||
+      (edit.pushRule && !validPushRule(edit.pushRule))
+    ) {
+      notify(
+        "Definišite količine, ograničenja i kompatibilne artikle izabranog modela.",
+      );
+      return;
+    }
     const test = validateRows(
       [
         {
@@ -119,7 +132,20 @@ export default function PriceList({
     notify("Artikal sačuvan.");
   }
   const update = (patch: Partial<Product>) =>
-    setEdit(edit ? { ...edit, ...patch } : null);
+    setEdit(
+      edit
+        ? {
+            ...edit,
+            ...patch,
+            ...(patch.category && patch.category !== "push"
+              ? { pushRule: undefined }
+              : {}),
+            ...(patch.category && patch.category !== "gola"
+              ? { verticalGolaRule: undefined }
+              : {}),
+          }
+        : null,
+    );
   return (
     <>
       <SectionHeading title="Cenovnik">
@@ -422,6 +448,20 @@ export default function PriceList({
                 onChange={(e) => update({ note: e.target.value })}
               />
             </Field>
+            {edit.category === "push" && (
+              <PushRuleEditor
+                product={edit}
+                products={products}
+                onChange={(pushRule) => update({ pushRule })}
+              />
+            )}
+            {edit.category === "gola" && (
+              <VerticalGolaRuleEditor
+                product={edit}
+                products={products}
+                onChange={(verticalGolaRule) => update({ verticalGolaRule })}
+              />
+            )}
             <label className="check-field">
               <input
                 type="checkbox"

@@ -5,6 +5,7 @@ import type { ElevationScene } from "../../core/elevation";
 import ElementSVG from "./ElementSVG";
 import { HobSVG, SinkSVG } from "./ApplianceSVG";
 import { number } from "../UI";
+import { templates } from "../../core/catalog";
 export default function ElementStrip({
   items,
   scene,
@@ -123,7 +124,11 @@ export default function ElementStrip({
                   height="70"
                   viewBox="0 0 86 70"
                   className="element-miniature"
-                  aria-label={isSpacer(item) ? "Razmak" : item.kind}
+                  aria-label={
+                    isSpacer(item)
+                      ? "Razmak"
+                      : templates.find((t) => t.kind === item.kind)?.name
+                  }
                 >
                   <ElementSVG
                     entry={entry}

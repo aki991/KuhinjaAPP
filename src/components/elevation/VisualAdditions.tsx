@@ -21,12 +21,14 @@ export default function VisualAddition({
         height={h}
         fill={
           o.kind === "window"
-            ? "#e9f0f2"
+            ? "#e4eef5"
             : o.kind === "column"
               ? "#e7e9e8"
               : "#f6f8f8"
         }
         strokeDasharray={o.kind === "niche" ? "5 4" : undefined}
+        stroke={o.kind === "window" ? "#343a36" : undefined}
+        strokeWidth={o.kind === "window" ? Math.min(7, w * 0.045) : undefined}
       />
       {o.kind === "window" && (
         <>
@@ -38,10 +40,24 @@ export default function VisualAddition({
             fill="none"
           />
           <path
-            d={`M${x + w / 2} ${y + 3}v${h - 6}M${x + 3} ${y + h * 0.55}h${w - 6}`}
+            d={`M${x + w / 2} ${y + 3}v${h - 6}`}
+            stroke="#464d48"
+            strokeWidth={2}
           />
           <path
             d={`M${x + w / 2 - 5} ${y + h * 0.55 + 6}v${Math.min(10, h * 0.12)}`}
+          />
+          <path
+            d={`M${x + w * 0.22} ${y + h * 0.12}l${-w * 0.08} ${h * 0.5}M${x + w * 0.3} ${y + h * 0.12}l${-w * 0.08} ${h * 0.5}`}
+            stroke="#fff"
+            strokeWidth={2}
+          />
+          <rect
+            x={x - 3}
+            y={y + h + 2}
+            width={w + 6}
+            height={3}
+            fill="#cfc8b3"
           />
         </>
       )}

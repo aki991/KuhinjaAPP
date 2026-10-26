@@ -13,6 +13,7 @@ import { validateBackup } from "./backup-validation";
 import { ensureLayout } from "./layout";
 import { defaultElevation, ensureElevation } from "./elevation";
 import { calculateOffer } from "./engine";
+import { ensureOpenings, upgradeDemoPush } from "./opening";
 export class KitchenDB extends Dexie {
   products!: Table<Product, string>;
   offers!: Table<Offer, string>;
@@ -78,6 +79,44 @@ export class KitchenDB extends Dexie {
             .table("meta")
             .put({ id: "draft", value: ensureElevation(draft.value) });
       });
+    this.version(5)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx
+          .table("products")
+          .toCollection()
+          .modify((p: Product) => {
+            Object.assign(p, upgradeDemoPush(p));
+          });
+        await tx
+          .table("offers")
+          .toCollection()
+          .modify((o: Offer) => {
+            Object.assign(o, ensureOpenings(o));
+          });
+        const draft = await tx.table("meta").get("draft");
+        if (draft?.value)
+          await tx
+            .table("meta")
+            .put({ id: "draft", value: ensureOpenings(draft.value) });
+      });
+    this.version(6)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx
+          .table("products")
+          .toCollection()
+          .modify((p: Product) => Object.assign(p, upgradeDemoPush(p)));
+        await tx
+          .table("offers")
+          .toCollection()
+          .modify((o: Offer) => Object.assign(o, ensureOpenings(o)));
+        const draft = await tx.table("meta").get("draft");
+        if (draft?.value)
+          await tx
+            .table("meta")
+            .put({ id: "draft", value: ensureOpenings(draft.value) });
+      });
   }
 }
 export const db = new KitchenDB();
@@ -93,7 +132,12 @@ export function createOffer(demo = false): Offer {
       layout: "L kuhinja",
     },
     elements: demo ? demoElements() : [],
-    selection: { ...defaultSelection },
+    selection: {
+      ...defaultSelection,
+      wallOpening: "handles",
+      tallOpening: "handles",
+      frontOverhang: 20,
+    },
     prices: structuredClone(demoPrices),
     settings: { ...defaults },
     variants: [],
@@ -181,11 +225,13 @@ export async function seedDatabase(database = db) {
   );
 }
 export async function saveOffer(offer: Offer, database = db) {
-  const saved = ensureElevation(
-    ensureLayout({
-      ...offer,
-      updatedAt: new Date().toISOString(),
-    }),
+  const saved = ensureOpenings(
+    ensureElevation(
+      ensureLayout({
+        ...offer,
+        updatedAt: new Date().toISOString(),
+      }),
+    ),
   );
   await database.transaction(
     "rw",
@@ -261,7 +307,9 @@ export async function restoreBackup(data: Backup, database = db) {
         await table.clear();
       await database.products.bulkPut(data.products);
       await database.offers.bulkPut(
-        data.offers.map((o) => ensureElevation(ensureLayout(o))),
+        data.offers.map((o) =>
+          ensureOpenings(ensureElevation(ensureLayout(o))),
+        ),
       );
       await database.suppliers.bulkPut(data.suppliers);
       await database.settings.bulkPut(data.settings);

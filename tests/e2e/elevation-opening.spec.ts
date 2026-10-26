@@ -24,7 +24,7 @@ test("2D GOLA i push crtaju frontove bez klasičnih ručki", async ({ page }) =>
       .getByRole("button", { name: "Promeni materijale i okove", exact: true })
       .click();
     await page
-      .getByRole("group", { name: "Otvaranje", exact: true })
+      .getByRole("group", { name: "Otvaranje donjih", exact: true })
       .getByRole("button", { name: opening, exact: true })
       .click();
     await page

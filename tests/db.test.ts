@@ -12,6 +12,8 @@ import {
 } from "../src/core/db";
 import { calculateOffer } from "../src/core/engine";
 import { defaultLayout, ensureLayout, newSpacer } from "../src/core/layout";
+import { newElement } from "../src/core/catalog";
+import { kitsKitchen } from "./fixtures/opening-kits";
 const databases: KitchenDB[] = [];
 const database = () => {
   const d = new KitchenDB("test-" + crypto.randomUUID());
@@ -22,6 +24,198 @@ afterEach(async () => {
   for (const d of databases.splice(0)) await d.delete();
 });
 describe("Trajna lokalna baza", () => {
+  it("v5→v6 omogućava demo Push za visoki ormar i čuva prilagođena pravila i cene", async () => {
+    const name = "v5-" + crypto.randomUUID(),
+      legacy = new Dexie(name);
+    legacy
+      .version(5)
+      .stores({
+        products: "id,category,supplier,code",
+        offers: "id,updatedAt",
+        suppliers: "id,name",
+        settings: "id",
+        meta: "id",
+        clients: "id,name",
+        templates: "id,version",
+      });
+    const o = ensureLayout(createOffer(true));
+    const push = o.prices.find((p) => p.id === "push")!;
+    push.pushRule!.kinds = ["wall1", "wall2"];
+    const custom = o.variants[0].prices.find((p) => p.id === "push")!;
+    custom.pushRule!.kinds = ["wall1", "wall2"];
+    custom.pushRule!.maxHeight = 1400;
+    o.elements[8].locked = true;
+    o.elements[8].selection = { ...o.selection, opening: "handles" };
+    const original = structuredClone(o);
+    await legacy.table("products").put(push);
+    await legacy.table("offers").put(o);
+    await legacy.table("meta").put({ id: "draft", value: o });
+    legacy.close();
+    const d = new KitchenDB(name);
+    databases.push(d);
+    await d.open();
+    const saved = (await d.offers.get(o.id))!;
+    expect(saved.elements).toEqual(original.elements);
+    expect(saved.selection).toEqual(original.selection);
+    expect(saved.prices.map((p) => p.price)).toEqual(
+      original.prices.map((p) => p.price),
+    );
+    expect(
+      saved.prices.find((p) => p.id === "push")!.pushRule!.kinds,
+    ).toContain("tall");
+    expect((await d.products.get("push"))!.pushRule!.kinds).toContain("tall");
+    expect(
+      ((await d.meta.get("draft"))!.value as typeof o).prices.find(
+        (p) => p.id === "push",
+      )!.pushRule!.kinds,
+    ).toContain("tall");
+    expect(
+      saved.variants[0].prices.find((p) => p.id === "push")!.pushRule,
+    ).toEqual(custom.pushRule);
+  });
+  it("čuva GOLA pravilo, Push komplet, komponente, individualne izbore i cenu kroz ponovno otvaranje i JSON", async () => {
+    const a = database(),
+      b = database(),
+      o = kitsKitchen();
+    o.selection.tallOpening = "gola";
+    o.selection.verticalGola = "vertical-test";
+    o.selection.wallOpening = "push";
+    o.selection.wallPush = "silent-test";
+    o.selection.wallHinge = "hinge-premium";
+    o.elements[4].locked = true;
+    o.elements[4].selection = { ...o.selection, opening: "handles" };
+    const total = calculateOffer(o).total;
+    expect(calculateOffer(o).errors).toEqual([]);
+    await saveOffer(o, a);
+    a.close();
+    await a.open();
+    const reopened = (await a.offers.get(o.id))!;
+    expect(reopened.selection).toEqual(o.selection);
+    expect(reopened.prices).toEqual(o.prices);
+    expect(calculateOffer(reopened).total).toBe(total);
+    await restoreBackup(JSON.parse(JSON.stringify(await exportBackup(a))), b);
+    expect(calculateOffer((await b.offers.get(o.id))!).total).toBe(total);
+    expect((await b.offers.get(o.id))!.elements).toEqual(reopened.elements);
+    const invalid = await exportBackup(a);
+    invalid.offers[0].prices.find(
+      (p) => p.id === "vertical-test",
+    )!.verticalGolaRule!.components[0].quantity = -1;
+    await expect(restoreBackup(invalid, b)).rejects.toThrow();
+    expect(calculateOffer((await b.offers.get(o.id))!).total).toBe(total);
+  });
+  it("v4→v5 dodaje odvojene izbore i demo pravila, bez promene cena, korpusa i zaključanih izbora", async () => {
+    const name = "v4-" + crypto.randomUUID(),
+      legacy = new Dexie(name);
+    legacy.version(4).stores({
+      products: "id,category,supplier,code",
+      offers: "id,updatedAt",
+      suppliers: "id,name",
+      settings: "id",
+      meta: "id",
+      clients: "id,name",
+      templates: "id,version",
+    });
+    const o = ensureLayout(createOffer(true));
+    delete o.selection.wallOpening;
+    delete o.selection.tallOpening;
+    delete o.selection.frontOverhang;
+    o.elements[5].locked = true;
+    for (const p of o.prices) delete p.pushRule;
+    for (const v of o.variants) {
+      delete v.selection.wallOpening;
+      delete v.selection.tallOpening;
+      delete v.selection.frontOverhang;
+      for (const p of v.prices) delete p.pushRule;
+    }
+    const original = structuredClone(o),
+      price = calculateOffer(o).total;
+    await legacy.table("offers").put(o);
+    await legacy.table("meta").put({ id: "draft", value: o });
+    await legacy.table("products").bulkPut(o.prices);
+    legacy.close();
+    const d = new KitchenDB(name);
+    databases.push(d);
+    await d.open();
+    const migrated = (await d.offers.get(o.id))!;
+    expect(migrated.elements).toEqual(original.elements);
+    expect(migrated.selection).toMatchObject({
+      wallOpening: "handles",
+      tallOpening: "handles",
+      frontOverhang: 20,
+    });
+    expect(migrated.prices.map((p) => p.price)).toEqual(
+      original.prices.map((p) => p.price),
+    );
+    expect(
+      migrated.prices.find((p) => p.id === "push")!.pushRule!.perDoor,
+    ).toBe(1);
+    expect(calculateOffer(migrated).total).toBe(price);
+    expect(((await d.meta.get("draft"))!.value as typeof o).selection).toEqual(
+      migrated.selection,
+    );
+    expect(migrated.variants[0].selection.wallOpening).toBe("handles");
+    expect((await d.products.get("push"))!.pushRule!.hinges).toEqual([
+      "hinge-economy",
+    ]);
+  });
+  it("sva tri otvaranja visećih i zaključani prepust preživljavaju JSON i ponovno otvaranje", async () => {
+    const d = database();
+    for (const mode of ["handles", "push", "overhang"] as const) {
+      const o = createOffer();
+      o.id = `wall-${mode}`;
+      o.layout = defaultLayout("L kuhinja", 4000);
+      o.selection = {
+        ...o.selection,
+        opening: "gola",
+        wallOpening: mode,
+        wallHinge: "hinge-economy",
+        frontOverhang: 20,
+      };
+      o.elements = (
+        ["base1", "drawer3", "wall1", "wall2", "wall1"] as const
+      ).map((kind, i) => ({
+        ...newElement(kind, o.selection),
+        id: `${mode}-${i}`,
+        placement: { wall: "A", offset: 0, order: i },
+      }));
+      o.elements[4].locked = true;
+      o.elements[4].selection = {
+        ...o.selection,
+        opening: "overhang",
+        frontOverhang: 35,
+      };
+      o.variants = [
+        {
+          id: "v-" + mode,
+          name: mode,
+          createdAt: o.createdAt,
+          selection: structuredClone(o.selection),
+          elements: structuredClone(o.elements),
+          prices: structuredClone(o.prices),
+          settings: structuredClone(o.settings),
+          layout: structuredClone(o.layout),
+        },
+      ];
+      await saveOffer(o, d);
+    }
+    const before = await d.offers.toArray(),
+      backup = await exportBackup(d);
+    await restoreBackup(backup, d);
+    d.close();
+    await d.open();
+    for (const o of before) {
+      const loaded = (await d.offers.get(o.id))!;
+      expect(loaded.selection).toEqual(o.selection);
+      expect(loaded.elements).toEqual(o.elements);
+      expect(loaded.variants[0].selection).toEqual(o.variants[0].selection);
+      expect(calculateOffer(loaded)).toEqual(calculateOffer(o));
+    }
+    const invalid = structuredClone(backup);
+    invalid.offers[0].prices.find((p) => p.id === "push")!.pushRule!.perDoor =
+      0;
+    await expect(restoreBackup(invalid, d)).rejects.toThrow("nevalidne");
+    expect(await d.offers.count()).toBe(3);
+  });
   it("automatsko čuvanje upisuje iste dimenzije u radnu kopiju i sačuvani projekat", async () => {
     const d = database(),
       o = ensureLayout(createOffer(true));

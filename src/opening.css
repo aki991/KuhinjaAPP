@@ -1,0 +1,107 @@
+.compact-options .opening-choices {
+  margin-bottom: 8px;
+}
+.compact-options .opening-choices legend {
+  font-size: 16px;
+  margin-bottom: 5px;
+}
+.opening-choices .choice-buttons > button {
+  min-height: 44px;
+  padding: 6px 3px;
+}
+.opening-choices .field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 0;
+}
+.opening-choices .field input {
+  width: 88px;
+  min-height: 42px;
+  padding: 7px 10px;
+  font-size: 16px;
+}
+.opening-compatible-note {
+  display: block;
+  color: #73889b;
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 0 0 8px;
+}
+.opening-problems {
+  margin: 10px 0;
+}
+.opening-problem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e4e9ec;
+}
+.opening-problem > span {
+  flex: 1;
+  min-width: 0;
+}
+.opening-problem strong,
+.opening-problem small {
+  display: block;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.opening-problem small {
+  color: #8a5e22;
+  margin-top: 3px;
+}
+.opening-problem button {
+  flex: none;
+  min-height: 44px;
+}
+.push-kit-panel fieldset {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 10px 0;
+}
+.push-kit-panel legend {
+  font-weight: 600;
+  font-size: 16px;
+}
+.kit-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e4e9ec;
+}
+.kit-option input {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  margin-top: 2px;
+}
+.kit-option span {
+  min-width: 0;
+}
+.kit-option strong,
+.kit-option small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.kit-option small,
+.kit-replacement,
+.push-kit-panel > small {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #627587;
+}
+.push-kit-panel .form-actions {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 0;
+  background: #fff;
+}
+.kit-component {
+  border-bottom: 1px solid #e4e9ec;
+  margin-bottom: 10px;
+}

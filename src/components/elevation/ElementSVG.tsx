@@ -1,7 +1,7 @@
 import { isSpacer } from "../../core/layout";
 import type { ElevationEntry, Rect } from "../../core/elevation";
 import { ApplianceSVG } from "./ApplianceSVG";
-const golaKinds = ["base1", "base2", "drawer2", "drawer3", "drawer4"];
+import { horizontalGolaKinds } from "../../core/opening";
 function Door({
   x,
   y,
@@ -11,6 +11,7 @@ function Door({
   handles,
   glass = false,
   lift = false,
+  upper = false,
 }: {
   x: number;
   y: number;
@@ -20,11 +21,28 @@ function Door({
   handles: boolean;
   glass?: boolean;
   lift?: boolean;
+  upper?: boolean;
 }) {
-  const inset = Math.min(3, w * 0.12, h * 0.12);
+  const inset = Math.min(4, w * 0.08, h * 0.08);
   return (
     <g data-front={glass ? "glass" : "door"}>
-      <rect x={x} y={y} width={w} height={h} fill="#eee5d3" />
+      <rect
+        x={x}
+        y={y}
+        width={w}
+        height={h}
+        fill="#f3e5c8"
+        className="front-frame"
+      />
+      <rect
+        data-front-panel="door"
+        x={x + inset}
+        y={y + inset}
+        width={Math.max(0.1, w - 2 * inset)}
+        height={Math.max(0.1, h - 2 * inset)}
+        fill="#f8edd7"
+        className="front-inset"
+      />
       {glass && (
         <>
           <rect
@@ -61,7 +79,7 @@ function Door({
         ) : (
           <path
             className="technical-handle"
-            d={`M${hinge === "left" ? x + w - 5 : x + 5} ${y + h * 0.42}v${Math.min(13, h * 0.17)}`}
+            d={`M${hinge === "left" ? x + w - Math.max(3, inset + 1) : x + Math.max(3, inset + 1)} ${upper ? y + h - Math.min(20, h * 0.23) - inset - 3 : y + inset + 3}v${Math.min(20, h * 0.23)}`}
           />
         ))}
     </g>
@@ -86,7 +104,8 @@ export default function ElementSVG({
     spacer = isSpacer(e.item),
     handles = e.opening === "handles",
     item = isSpacer(e.item) ? null : e.item,
-    gola = !!item && e.opening === "gola" && golaKinds.includes(item.kind),
+    gola =
+      !!item && e.opening === "gola" && horizontalGolaKinds.includes(item.kind),
     gap = Math.min(1.3, w * 0.02, h * 0.02),
     innerW = Math.max(1, w - 2 * gap),
     innerH = Math.max(1, h - 2 * gap);
@@ -147,7 +166,17 @@ export default function ElementSVG({
               y={gap + i * dh}
               width={innerW}
               height={Math.max(1, dh - gap)}
-              fill="#eee5d3"
+              fill="#f3e5c8"
+              className="front-frame"
+            />
+            <rect
+              data-front-panel="drawer"
+              x={gap + Math.min(3, dh * 0.1)}
+              y={gap + i * dh + Math.min(3, dh * 0.1)}
+              width={Math.max(1, innerW - 2 * Math.min(3, dh * 0.1))}
+              height={Math.max(1, dh - gap - 2 * Math.min(3, dh * 0.1))}
+              fill="#f8edd7"
+              className="front-inset"
             />
             {handles && (
               <path
@@ -192,7 +221,11 @@ export default function ElementSVG({
         )}
         {count > 0 &&
           Array.from({ length: count }, (_, i) => {
-            const fh = tall ? (innerH - openingH) / count : innerH,
+            const fh = tall
+                ? (innerH - openingH) / count
+                : innerH +
+                  e.frontOverhang * (h / e.rect.height) +
+                  (e.frontOverhang > 0 ? gap : 0),
               fw = tall ? innerW : innerW / count,
               x = tall ? gap : gap + i * fw,
               y = tall
@@ -206,7 +239,7 @@ export default function ElementSVG({
                 x={x}
                 y={y}
                 width={Math.max(1, fw - gap)}
-                height={Math.max(1, fh - gap)}
+                height={Math.max(1, fh - (e.frontOverhang > 0 ? 0 : gap))}
                 hinge={
                   count === 1
                     ? item!.visual?.hinge || "left"
@@ -217,6 +250,7 @@ export default function ElementSVG({
                 handles={handles}
                 glass={!!item!.visual?.glass}
                 lift={item!.kind === "lift"}
+                upper={e.row === "wall"}
               />
             );
           })}
@@ -241,13 +275,41 @@ export default function ElementSVG({
       data-kind={e.item.kind}
       data-mm-width={e.rect.width}
       data-mm-height={e.rect.height}
+      data-front-overhang={e.frontOverhang || undefined}
+      data-front-height={e.frontOverhang ? e.frontHeight : undefined}
       data-mm-x={e.rect.x}
       data-mm-bottom={e.rect.y}
-      className={`technical-element ${e.conflict ? "conflict" : ""} ${selected ? "selected" : ""} ${dragging ? "dragging" : ""}`}
+      className={`technical-element ${spacer ? "layout-spacer" : ""} ${e.conflict ? "conflict" : ""} ${selected ? "selected" : ""} ${dragging ? "dragging" : ""}`}
       clipPath={clipId ? `url(#${clipId})` : undefined}
     >
       <g transform={`translate(${r.x} ${r.y})`}>
         {content}
+        {e.verticalProfile &&
+          Array.from({ length: e.verticalProfile.count }, (_, i) => {
+            const p = e.verticalProfile!,
+              scale = h / e.rect.height,
+              width = Math.max(1.5, p.inset * (w / e.rect.width));
+            return (
+              <rect
+                key={i}
+                data-gola="vertical"
+                x={
+                  p.count === 2
+                    ? i === 0
+                      ? 0
+                      : w - width
+                    : item?.visual?.hinge === "right"
+                      ? 0
+                      : w - width
+                }
+                y={p.top * scale}
+                width={width}
+                height={Math.max(0, h - (p.top + p.bottom) * scale)}
+                fill="#9b9f99"
+                stroke="none"
+              />
+            );
+          })}
         {!spacer && (
           <rect width={w} height={h} className="cabinet-outline" fill="none" />
         )}

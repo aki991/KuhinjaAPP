@@ -1,0 +1,116 @@
+/* Front elevation and card miniatures share the same cabinet renderer. */
+.technical-room {
+  fill: #fafaf6;
+  stroke: #a0a297;
+  stroke-width: 0.8;
+}
+.technical-element {
+  stroke: #8d8d7b;
+  stroke-width: 0.9;
+}
+.front-frame {
+  stroke: #a69472;
+  stroke-width: 0.85;
+}
+.front-inset {
+  stroke: #c8b58c;
+  stroke-width: 0.85;
+}
+.door-opening {
+  stroke: #a99c80;
+  stroke-width: 0.75;
+  stroke-dasharray: 4 4;
+}
+.technical-handle {
+  stroke: #55584d;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.technical-floor {
+  stroke: #73796e;
+  stroke-width: 1.5;
+}
+.cabinet-outline {
+  stroke: #918c77;
+  stroke-width: 0.9;
+}
+.technical-element.selected .cabinet-outline {
+  stroke: #98622f;
+  stroke-width: 1.8;
+}
+.technical-element.conflict .cabinet-outline {
+  stroke: #b94c43;
+  stroke-width: 1.5;
+}
+.wall-elevation text.technical-code {
+  fill: #2859a4;
+  font-weight: 500;
+  stroke: #fafaf6;
+  stroke-width: 2;
+}
+.wall-elevation text.appliance-label {
+  fill: #55574c;
+  stroke: none;
+  font-size: 14px;
+  font-weight: 400;
+}
+.appliance-lines {
+  stroke: #777d70;
+  stroke-width: 0.9;
+}
+.technical-dimension {
+  stroke: #8b8e89;
+  stroke-width: 0.65;
+}
+.technical-dimension text {
+  fill: #365b93;
+  font-weight: 400;
+}
+.elevation-toolbar {
+  flex-wrap: wrap;
+  gap: 2px 4px;
+}
+.elevation-toolbar .text-btn {
+  gap: 5px;
+  padding: 4px;
+  font-size: 14px;
+  min-height: 44px;
+}
+.elevation-toolbar .dimension-toggle {
+  min-width: 49px;
+  border: 1px solid #d8c8b3;
+  border-radius: 8px;
+  justify-content: center;
+}
+.dimension-toggle[aria-pressed="true"] {
+  background: #eedbbd;
+  color: #593718;
+  border-color: #b38b59;
+}
+.elevation-free-space {
+  flex-basis: 100%;
+  padding: 2px 8px 7px;
+  color: #745d46;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.kitchen-fullscreen .elevation-free-space {
+  padding-bottom: 3px;
+}
+.element-miniature {
+  background: #fafaf6;
+  border-radius: 3px;
+}
+.element-miniature .technical-handle {
+  stroke-width: 1.8;
+}
+.element-miniature .front-inset {
+  stroke-width: 0.7;
+}
+.element-strip-card .strip-code {
+  color: #315b95;
+}
+.wall-elevation .layout-spacer:not(.selected):not(.dragging) .technical-spacer {
+  stroke: transparent;
+  fill: transparent;
+}

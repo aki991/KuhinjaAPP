@@ -15,6 +15,12 @@ import type {
   VisualAppliance,
   WallObject,
 } from "./types";
+import {
+  effectiveSelection,
+  frontOverhang,
+  wallFrontHeight,
+  verticalGola,
+} from "./opening";
 export interface Rect {
   x: number;
   y: number;
@@ -35,6 +41,14 @@ export interface ElevationEntry {
   counterTop: number;
   visible: Rect[];
   conflict: boolean;
+  frontOverhang: number;
+  frontHeight: number;
+  verticalProfile?: {
+    top: number;
+    bottom: number;
+    inset: number;
+    count: number;
+  };
 }
 export interface ElevationScene {
   wall: string;
@@ -134,8 +148,14 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
   let upperBottom = baseTop + maxTop + config.upperGap;
   const entries: ElevationEntry[] = [];
   function entry(item: LayoutItem, instance: number, rect: Rect) {
-    const selection =
-      !isSpacer(item) && item.locked ? item.selection : offer.selection;
+    const selection = isSpacer(item)
+        ? offer.selection
+        : effectiveSelection(item, offer.selection),
+      rawExtension = isSpacer(item) ? 0 : frontOverhang(item, selection),
+      extension =
+        Number.isFinite(rawExtension) && rawExtension > 0 && rawExtension <= 100
+          ? rawExtension
+          : 0;
     return {
       key: `${item.id}-${instance}`,
       id: item.id,
@@ -145,10 +165,30 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
       row: laneOf(item),
       rect,
       opening: selection.opening,
+      verticalProfile:
+        !isSpacer(item) && selection.opening === "gola"
+          ? (() => {
+              const v = verticalGola(item, selection, offer.prices);
+              return v
+                ? {
+                    top: v.rule.top,
+                    bottom: v.rule.bottom,
+                    inset: v.rule.frontInset,
+                    count: v.rule.profiles,
+                  }
+                : undefined;
+            })()
+          : undefined,
+      frontOverhang: extension,
+      frontHeight: isSpacer(item)
+        ? 0
+        : wallFrontHeight(item, selection, offer.settings.gap),
       appliance: isSpacer(item) ? ("none" as const) : typeAppliance(item),
       hob: !isSpacer(item) && !!item.visual?.hob,
       counterTop: rect.y + rect.height,
-      visible: [rect],
+      visible: [
+        { ...rect, y: rect.y - extension, height: rect.height + extension },
+      ],
       conflict: false,
     };
   }
@@ -234,6 +274,7 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
   for (const e of entries.filter((e) => e.row === "wall"))
     if (isSpacer(e.item) || e.item.visual?.bottom === undefined) {
       e.rect.y = upperBottom;
+      e.visible = [frontBounds(e)];
       e.counterTop = e.rect.y + e.rect.height;
     }
   for (const e of entries.filter((e) => e.row === "base")) {
@@ -256,7 +297,7 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
     (e) => e.row === "wall" && !isSpacer(e.item),
   )) {
     for (const t of tall)
-      if (intersects(e.rect, t.rect)) {
+      if (intersects(frontBounds(e), t.rect)) {
         e.conflict = true;
         e.visible = e.visible.flatMap((r) => subtractRect(r, t.rect));
         warnings.push(
@@ -282,7 +323,7 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
     for (const e of entries.filter(
       (e) => !isSpacer(e.item) && e.item.kind !== "plinth",
     ))
-      if (intersects(rect, e.rect)) {
+      if (intersects(rect, frontBounds(e))) {
         e.conflict = true;
         warnings.push(
           `${{ window: "Prozor", door: "Vrata", column: "Stub", niche: "Niša" }[object.kind]} se preklapa sa ${e.code}. Proverite položaj.`,
@@ -325,6 +366,11 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
     config,
   };
 }
+export const frontBounds = (e: ElevationEntry): Rect => ({
+  ...e.rect,
+  y: e.rect.y - e.frontOverhang,
+  height: e.rect.height + e.frontOverhang,
+});
 export function toScreen(
   rect: Rect,
   scale: number,
@@ -351,7 +397,9 @@ export function kitchenBounds(scene: ElevationScene): Rect {
     };
   const left = Math.min(...scene.entries.map((e) => e.rect.x));
   const bottom = Math.min(
-    ...scene.entries.map((e) => (e.row === "base" ? 0 : e.rect.y)),
+    ...scene.entries.map((e) =>
+      e.row === "base" ? 0 : e.rect.y - e.frontOverhang,
+    ),
   );
   const right = Math.max(...scene.entries.map((e) => e.rect.x + e.rect.width));
   const top = Math.max(

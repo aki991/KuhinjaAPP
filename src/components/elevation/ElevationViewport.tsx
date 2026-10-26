@@ -7,7 +7,7 @@ import {
 } from "../../core/elevation";
 import type { LayoutItem, LayoutLane, KitchenWall } from "../../core/types";
 import type { DragView } from "../useLayoutDrag";
-import { HeightDimension, WidthDimension } from "./Dimensions";
+import { HeightDimension, dimensionChains } from "./Dimensions";
 import WallElevation from "./WallElevation";
 
 export default function ElevationViewport({
@@ -48,6 +48,7 @@ export default function ElevationViewport({
   const [box, setBox] = useState({ width: 320, maxHeight: 420 }),
     [zoom, setZoom] = useState(1),
     [fitRequest, setFitRequest] = useState(0);
+  const [showDimensions, setShowDimensions] = useState(false);
   const [pan, setPan] = useState({ left: 0, top: 0 });
   useLayoutEffect(() => {
     const node = frame.current;
@@ -80,13 +81,23 @@ export default function ElevationViewport({
     setZoom(1);
     setFitRequest((n) => n + 1);
   }, [fullscreen]);
-  const camera = elevationCamera(
+  const fittedCamera = elevationCamera(
       scene,
       box.width,
       box.maxHeight,
       zoom,
       fullscreen,
     ),
+    dimensionSpace = showDimensions
+      ? Math.max(0, dimensionChains(scene, fittedCamera.scale).totalY + 20 - 64)
+      : 0,
+    camera = {
+      ...fittedCamera,
+      canvasHeight: fittedCamera.canvasHeight + dimensionSpace,
+      viewportHeight: fullscreen
+        ? fittedCamera.viewportHeight
+        : fittedCamera.viewportHeight + dimensionSpace,
+    },
     actual = camera.scale,
     { margin } = camera;
   useLayoutEffect(() => onScale(actual), [actual, onScale]);
@@ -232,7 +243,6 @@ export default function ElevationViewport({
   const floor = margin.top + scene.height * actual,
     baseTop = margin.top + (scene.height - scene.baseTop) * actual,
     wallBottom = margin.top + (scene.height - scene.upperBottom) * actual;
-  const emptyUpperDrag = !!drag && !scene.entries.some((e) => e.row === "wall");
   const roomTop =
       margin.top + (scene.height - scene.roomHeight) * actual - pan.top,
     roomBottom = floor - pan.top,
@@ -278,6 +288,14 @@ export default function ElevationViewport({
             <Scan size={18} /> Uklopi
           </button>
         </div>
+        <button
+          type="button"
+          className="text-btn dimension-toggle"
+          aria-pressed={showDimensions}
+          onClick={() => setShowDimensions((value) => !value)}
+        >
+          Kote
+        </button>
         {fullscreen ? (
           walls.length > 1 && (
             <select
@@ -311,6 +329,31 @@ export default function ElevationViewport({
             </button>
           </div>
         )}
+        <span className="elevation-free-space">
+          Slobodno: donji{" "}
+          {Math.max(
+            0,
+            scene.length -
+              Math.max(
+                0,
+                ...scene.entries
+                  .filter((e) => e.row === "base")
+                  .map((e) => e.rect.x + e.rect.width),
+              ),
+          )}{" "}
+          mm · viseći{" "}
+          {Math.max(
+            0,
+            scene.length -
+              Math.max(
+                0,
+                ...scene.entries
+                  .filter((e) => e.row === "wall")
+                  .map((e) => e.rect.x + e.rect.width),
+              ),
+          )}{" "}
+          mm
+        </span>
       </div>
       <div
         className="elevation-frame"
@@ -342,6 +385,7 @@ export default function ElevationViewport({
                 height: camera.canvasHeight,
               }}
               rulers={false}
+              showDimensions={showDimensions}
             />
             {(["wall", "base", "extra"] as LayoutLane[]).map((row) => {
               const emptyUpper =
@@ -443,36 +487,22 @@ export default function ElevationViewport({
           height="100%"
           aria-label={`Visina prostorije ${scene.roomHeight} mm`}
         >
-          <rect
-            width="100%"
-            height={fullscreen ? 86 : 31}
-            fill={emptyUpperDrag ? "transparent" : "white"}
-          />
-          <rect width={27} height="100%" fill="white" />
-          {!emptyUpperDrag && (
-            <WidthDimension
-              x={margin.left - pan.left}
-              y={fullscreen ? 88 : 24}
-              width={scene.length * actual}
-              value={scene.length}
-            />
+          {showDimensions && (
+            <>
+              <rect width={27} height="100%" fill="white" />
+              {dimensionBottom > dimensionTop && (
+                <HeightDimension
+                  x={20}
+                  y={dimensionTop}
+                  height={dimensionBottom - dimensionTop}
+                  value={scene.roomHeight}
+                  broken={
+                    roomTop < 42 || roomBottom > camera.viewportHeight - 52
+                  }
+                />
+              )}
+            </>
           )}
-          {dimensionBottom > dimensionTop && (
-            <HeightDimension
-              x={20}
-              y={dimensionTop}
-              height={dimensionBottom - dimensionTop}
-              value={scene.roomHeight}
-              broken={roomTop < 42 || roomBottom > camera.viewportHeight - 52}
-            />
-          )}
-          <text
-            x={32}
-            y={camera.viewportHeight - 8}
-            className="technical-units"
-          >
-            mm · pogled spreda
-          </text>
         </svg>
       </div>
       {fullscreen && box.width < box.maxHeight && (
