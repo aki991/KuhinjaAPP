@@ -12,12 +12,18 @@ import type {
 import { templates, uid } from "./catalog";
 export const isSpacer = (e: LayoutItem): e is LayoutSpacer =>
   e.kind === "spacer";
+/** Bridge cabinets sit above the wall cabinets, so they never use up wall-row length. */
+export const isBridge = (e: LayoutItem) =>
+  !isSpacer(e) &&
+  (["wallBridgeFridge", "wallBridgeOven"].includes(e.kind) ||
+    !!templates.find((t) => t.kind === e.kind)?.bridge);
 export const rowOf = (e: LayoutItem): LayoutRow =>
   isSpacer(e)
     ? e.placement.row === "wall"
       ? "wall"
       : "base"
-    : ["worktop", "side", "plinth", "panel", "filler"].includes(e.kind)
+    : ["worktop", "side", "plinth", "panel", "filler"].includes(e.kind) ||
+        isBridge(e)
       ? "extra"
       : templates.find((t) => t.kind === e.kind)?.group === "Gornji"
         ? "wall"
@@ -34,6 +40,83 @@ export const rowName: Record<LayoutRow, string> = {
 };
 export const sameLane = (a: LayoutItem, b: LayoutItem) =>
   laneOf(a) === laneOf(b);
+export const connectedWalls = (layout: KitchenLayout) =>
+  layout.walls.filter((w) => !w.id.startsWith("island")).slice(0, 3);
+export interface JunctionReservation {
+  wall: string;
+  row: "base" | "wall";
+  edge: "start" | "end";
+  size: number;
+  source: string;
+  sourceWall: string;
+}
+/** A corner footprint belongs to one cabinet, never an extra priced element. */
+export function junctionReservations(
+  elements: KitchenElement[],
+  layout: KitchenLayout,
+) {
+  const walls = connectedWalls(layout),
+    reservations: JunctionReservation[] = [];
+  const corner = (item: LayoutItem | undefined) =>
+    item &&
+    (["corner", "cornerBlind", "wallCorner"].includes(item.kind) ||
+      templates.find((t) => t.kind === item.kind)?.corner);
+  for (let i = 1; i < walls.length; i++) {
+    const previous = walls[i - 1],
+      next = walls[i];
+    for (const row of ["base", "wall"] as const) {
+      const before = orderedLane(elements, layout, previous.id, row),
+        after = orderedLane(elements, layout, next.id, row),
+        last = before.at(-1),
+        first = after[0];
+      const reserve = (
+        wall: string,
+        edge: "start" | "end",
+        source: LayoutItem,
+        sourceWall: string,
+      ) => {
+        if (!isSpacer(source))
+          reservations.push({
+            wall,
+            row,
+            edge,
+            size: source.depth,
+            source: source.id,
+            sourceWall,
+          });
+      };
+      if (corner(last)) reserve(next.id, "start", last!, previous.id);
+      else if (corner(first)) reserve(previous.id, "end", first, next.id);
+      else if (last && !isSpacer(last)) {
+        const start = reservations
+          .filter(
+            (r) =>
+              r.wall === previous.id && r.row === row && r.edge === "start",
+          )
+          .reduce((max, r) => Math.max(max, r.size), 0);
+        const nextDepth = first && !isSpacer(first) ? first.depth : 0;
+        if (
+          start + before.reduce((sum, item) => sum + span(item), 0) >
+            previous.length - nextDepth ||
+          start + before.reduce((sum, item) => sum + span(item), 0) >=
+            previous.length
+        )
+          reserve(next.id, "start", last, previous.id);
+      }
+    }
+  }
+  return reservations;
+}
+export function reservedLength(
+  reservations: JunctionReservation[],
+  wall: string,
+  row: "base" | "wall",
+  edge: "start" | "end",
+) {
+  return reservations
+    .filter((r) => r.wall === wall && r.row === row && r.edge === edge)
+    .reduce((max, r) => Math.max(max, r.size), 0);
+}
 export const span = (e: LayoutItem) => e.width * e.quantity;
 export const endOf = (e: LayoutItem) => (e.placement?.offset || 0) + span(e);
 const position = (e: LayoutItem) =>
@@ -46,6 +129,64 @@ export function defaultLayout(shape: string, length = 3000): KitchenLayout {
   if (shape === "Sa ostrvom")
     walls.push({ id: "island", name: "Ostrvo", length });
   return { walls, activeWall: "A", version: 3, spacers: [] };
+}
+/** Changing a room never discards cabinets, gaps or wall objects. */
+export function spaceChange(offer: Offer, shape: string) {
+  const next = structuredClone(offer),
+    layout = next.layout!;
+  if (shape === "Slobodan raspored") return { offer: next, affected: 0 };
+  const required = shape.startsWith("U")
+    ? ["A", "B", "C"]
+    : shape.startsWith("L")
+      ? ["A", "B"]
+      : ["A"];
+  const removed = layout.walls.filter(
+    (w) => w.id !== "island" && !required.includes(w.id),
+  );
+  const ids = new Set(removed.map((w) => w.id));
+  const items = allLayoutItems(next.elements, layout);
+  const affectedItems = items.filter((item) =>
+    ids.has(item.placement?.wall || ""),
+  );
+  const affectedObjects = (next.elevation?.objects || []).filter((object) =>
+    ids.has(object.wall),
+  );
+  const affected = affectedItems.length + affectedObjects.length;
+  const nextOrder = { base: 0, wall: 0, extra: 0 };
+  for (const row of ["base", "wall", "extra"] as LayoutLane[])
+    nextOrder[row] = orderedLane(next.elements, layout, "A", row).length;
+  for (const item of affectedItems.sort(
+    (a, b) =>
+      (a.placement?.wall || "").localeCompare(b.placement?.wall || "") ||
+      position(a) - position(b),
+  )) {
+    const row = laneOf(item);
+    item.placement = { wall: "A", row, order: nextOrder[row]++, offset: 0 };
+  }
+  for (const object of affectedObjects) object.wall = "A";
+  const oldWalls = layout.walls;
+  layout.walls = required.map(
+    (id) =>
+      oldWalls.find((w) => w.id === id) || {
+        id,
+        name: `Zid ${id}`,
+        length: oldWalls.find((w) => w.id === "A")?.length || 3000,
+      },
+  );
+  const island = oldWalls.find((w) => w.id === "island");
+  if (island || shape === "Sa ostrvom")
+    layout.walls.push(island || { id: "island", name: "Ostrvo", length: 3000 });
+  if (!layout.walls.some((w) => w.id === layout.activeWall))
+    layout.activeWall = "A";
+  if (affected)
+    layout.migrationNotes = [
+      ...new Set([
+        ...(layout.migrationNotes || []),
+        "Stavke sa uklonjenih zidova premeštene su na zid A. Proverite raspored i položaj prepreka.",
+      ]),
+    ];
+  const packed = packLayout(next.elements, layout);
+  return { offer: { ...next, ...packed }, affected };
 }
 export const allLayoutItems = (
   elements: KitchenElement[],
@@ -91,14 +232,21 @@ export function newSpacer(
 
 /** Recomputes all offsets. This never changes cabinet size, quantity or wall. */
 export function packLayout(elements: KitchenElement[], layout: KitchenLayout) {
-  const nextElements = structuredClone(elements),
+  // An automatic worktop lives and dies with its cabinet.
+  const nextElements = structuredClone(elements).filter(
+      (e) => !e.autoTopFor || elements.some((x) => x.id === e.autoTopFor),
+    ),
     nextLayout = structuredClone(layout);
   nextLayout.version = 3;
   nextLayout.spacers ||= [];
   const items = allLayoutItems(nextElements, nextLayout);
+  const reservations = junctionReservations(nextElements, nextLayout);
   for (const wall of nextLayout.walls)
     for (const row of ["base", "wall", "extra"] as LayoutLane[]) {
-      let offset = 0;
+      let offset =
+        row === "extra"
+          ? 0
+          : reservedLength(reservations, wall.id, row, "start");
       const lane = items
         .filter((e) => e.placement?.wall === wall.id && laneOf(e) === row)
         .sort((a, b) => position(a) - position(b));
@@ -112,6 +260,14 @@ export function packLayout(elements: KitchenElement[], layout: KitchenLayout) {
         if (row !== "extra") offset += span(e);
       });
     }
+  for (const top of nextElements.filter((e) => e.autoTopFor)) {
+    const owner = nextElements.find((e) => e.id === top.autoTopFor);
+    if (!owner?.placement) continue;
+    top.width = owner.width * owner.quantity;
+    top.visual = { ...top.visual, offset: owner.placement.offset };
+    if (top.placement && top.placement.wall !== owner.placement.wall)
+      top.placement = { ...top.placement, wall: owner.placement.wall };
+  }
   return { elements: nextElements, layout: nextLayout };
 }
 export function ensureLayout<T extends Offer>(offer: T): T {
@@ -119,7 +275,9 @@ export function ensureLayout<T extends Offer>(offer: T): T {
     legacy = !!next.layout && next.layout.version !== 3;
   next.layout ||= defaultLayout(next.client.layout);
   if (
-    next.elements.some((e) => templates.find((t) => t.kind === e.kind)?.group === "Ostrvski") &&
+    next.elements.some(
+      (e) => templates.find((t) => t.kind === e.kind)?.group === "Ostrvski",
+    ) &&
     !next.layout.walls.some((w) => w.id === "island")
   )
     next.layout.walls.push({ id: "island", name: "Ostrvo", length: 3000 });
@@ -135,7 +293,9 @@ export function ensureLayout<T extends Offer>(offer: T): T {
       e.placement = appendPlacement(
         placed,
         e,
-        templates.find((t) => t.kind === e.kind)?.group === "Ostrvski" ? "island" : next.layout.activeWall,
+        templates.find((t) => t.kind === e.kind)?.group === "Ostrvski"
+          ? "island"
+          : next.layout.activeWall,
       );
     placed.push(e);
   }
@@ -221,15 +381,28 @@ export function wallUsage(
     upper = items
       .filter((e) => laneOf(e) === "wall")
       .reduce((a, e) => a + span(e), 0),
-    occupied = Math.max(base, upper);
+    reservations = junctionReservations(
+      elements,
+      layout || { walls: [wall], activeWall: wall.id },
+    ),
+    reservedBase =
+      reservedLength(reservations, wall.id, "base", "start") +
+      reservedLength(reservations, wall.id, "base", "end"),
+    reservedUpper =
+      reservedLength(reservations, wall.id, "wall", "start") +
+      reservedLength(reservations, wall.id, "wall", "end"),
+    occupied = Math.max(base + reservedBase, upper + reservedUpper);
   return {
     occupied,
     free: Math.max(0, wall.length - occupied),
     overrun: Math.max(0, occupied - wall.length),
     overlaps: [] as string[],
     extent: Math.max(wall.length, occupied),
-    base,
-    upper,
+    base: base + reservedBase,
+    upper: upper + reservedUpper,
+    freeBase: Math.max(0, wall.length - base - reservedBase),
+    reservedBase,
+    reservedUpper,
   };
 }
 export const canPlace = (item: LayoutItem, row: LayoutLane) =>

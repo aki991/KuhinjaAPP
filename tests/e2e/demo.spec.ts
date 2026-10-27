@@ -339,7 +339,9 @@ test("nova kuhinja: dužina, dodavanje, dupliranje, redosled, zid i ponovno otva
     .getByRole("combobox", { name: "Tip kuhinje", exact: true })
     .selectOption("L kuhinja");
   await page.getByRole("button", { name: "Dodaj elemente" }).click();
-  await expect(page.locator(".wall-length")).toContainText("240");
+  await page.getByRole("button", { name: "Okviri i mere" }).click();
+  await expect(page.getByRole("dialog").getByLabel("Dužina zida (mm)")).toHaveValue("2400");
+  await page.getByRole("dialog").getByRole("button", { name: "Zatvori", exact: true }).click();
   await page
     .getByRole("button", { name: "Dodaj element", exact: true })
     .click();
@@ -446,27 +448,17 @@ test("produkcioni PWA: manifest, offline ponovno učitavanje, optimizacija i PDF
   await context.setOffline(false);
 });
 
-test("zid: ručna dužina, upozorenje prekoračenja i posebna grupa ostrva", async ({
+test("zid: ručna dužina, upozorenje prekoračenja i ostrvo kao običan element", async ({
   page,
 }) => {
   await openKitchen(page);
-  await page.getByRole("button", { name: "Izmeni dužinu zida" }).click();
+  await page.getByRole("button", { name: "Okviri i mere" }).click();
   await page.getByLabel("Dužina zida (mm)").fill("3000");
   await page
     .getByRole("dialog")
-    .getByRole("button", { name: "Sačuvaj", exact: true })
+    .getByRole("button", { name: "Sačuvaj prikaz", exact: true })
     .click();
   await expect(page.getByRole("alert")).toContainText("prelaze zid za 80 cm");
-  await page.getByRole("button", { name: "Dodaj zid ili ostrvo" }).click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Ostrvo", exact: true })
-    .click();
-  await expect(
-    page.getByRole("button", { name: "Ostrvo", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("alert")).toHaveCount(0);
-  await expect(page.locator(".wall-measure")).toContainText("Slobodno 300 cm");
   await page
     .getByRole("button", { name: "Dodaj element", exact: true })
     .click();
@@ -479,5 +471,5 @@ test("zid: ručna dužina, upozorenje prekoračenja i posebna grupa ostrva", asy
     .getByRole("button", { name: "Sačuvaj", exact: true })
     .click();
   await expect(page.locator(".elevation-hit")).toHaveCount(1);
-  await expect(page.locator(".wall-measure")).toContainText("Zauzeto 90 cm");
+  await expect(page.locator(".wall-measure")).toContainText("Donji red 210 cm");
 });

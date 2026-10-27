@@ -14,6 +14,7 @@ import { ensureLayout } from "./layout";
 import { defaultElevation, ensureElevation } from "./elevation";
 import { calculateOffer, onlyUnsupportedErrors } from "./engine";
 import { ensureOpenings, upgradeDemoPush } from "./opening";
+import { siteMaterials } from "./site-materials";
 export class KitchenDB extends Dexie {
   products!: Table<Product, string>;
   offers!: Table<Offer, string>;
@@ -126,7 +127,46 @@ export class KitchenDB extends Dexie {
           rules: templates,
         });
       });
+    this.version(8)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx
+          .table("templates")
+          .put({ id: "library-1.2", version: "1.2.0", rules: templates });
+      });
+    this.version(9)
+      .stores({})
+      .upgrade(async (tx) => {
+        // Materials from the supplied list; existing articles are never overwritten.
+        const products = tx.table("products");
+        for (const m of siteMaterials)
+          if (!(await products.get(m.id))) await products.put(structuredClone(m));
+      });
+    this.version(10)
+      .stores({})
+      .upgrade(async (tx) => {
+        // Choosing an opening in the element editor used to lock all of the element's
+        // materials, so later decor changes were ignored. Keep only its own opening.
+        await tx
+          .table("offers")
+          .toCollection()
+          .modify((o: Offer) => Object.assign(o, unlockOpenings(o)));
+        const draft = await tx.table("meta").get("draft");
+        if (draft?.value)
+          await tx
+            .table("meta")
+            .put({ id: "draft", value: unlockOpenings(draft.value) });
+      });
   }
+}
+function unlockOpenings<T extends Pick<Offer, "elements" | "variants">>(o: T): T {
+  const unlock = (elements: Offer["elements"]) =>
+    elements.map((e) => (e.locked ? { ...e, locked: false, ownOpening: true } : e));
+  return {
+    ...o,
+    elements: unlock(o.elements),
+    variants: (o.variants ?? []).map((v) => ({ ...v, elements: unlock(v.elements) })),
+  };
 }
 export const db = new KitchenDB();
 export function createOffer(demo = false): Offer {
@@ -185,6 +225,7 @@ export async function seedDatabase(database = db) {
     async () => {
       if (await database.meta.get("initialized")) return;
       await database.products.bulkPut(structuredClone(demoPrices));
+      await database.products.bulkPut(structuredClone(siteMaterials));
       await database.settings.put({ id: "main", value: { ...defaults } });
       await database.suppliers.put({
         id: "demo",
@@ -290,7 +331,10 @@ export async function exportBackup(database = db) {
     clients: await database.clients.toArray(),
     importFormats: (await database.meta.toArray())
       .filter((row) => row.id.startsWith("import-format:"))
-      .map((row) => row.value as { supplier: string; mapping: Record<string, string> }),
+      .map(
+        (row) =>
+          row.value as { supplier: string; mapping: Record<string, string> },
+      ),
   };
 }
 export type Backup = Awaited<ReturnType<typeof exportBackup>>;
@@ -329,7 +373,10 @@ export async function restoreBackup(data: Backup, database = db) {
       await database.clients.bulkPut(data.clients);
       await database.meta.where("id").startsWith("import-format:").delete();
       for (const format of data.importFormats ?? [])
-        await database.meta.put({ id: `import-format:${format.supplier.toLowerCase()}`, value: format });
+        await database.meta.put({
+          id: `import-format:${format.supplier.toLowerCase()}`,
+          value: format,
+        });
       await database.meta.put({ id: "initialized", value: true });
     },
   );

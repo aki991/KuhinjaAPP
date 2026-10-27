@@ -1,3 +1,4 @@
+import { pinchZoom } from "./pinch";
 import {
   test,
   expect,
@@ -220,8 +221,7 @@ test("telefon: običan pokret skroluje stranicu i šemu bez aktiviranja prevlač
   await expect(page.getByTestId("drag-ghost")).toHaveCount(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.evaluate(() => window.scrollTo(0, 0));
-  for (let i = 0; i < 3; i++)
-    await page.getByRole("button", { name: "Uvećaj 2D prikaz" }).click();
+  await pinchZoom(page);
   const right = await point(card(page, "D3"));
   await touch(session, "touchStart", right.x, right.y);
   await slideTouch(page, session, right, { x: right.x - 170, y: right.y }, 8);
@@ -294,9 +294,9 @@ test("nekompatibilan red odbija premeštanje, a prekoračenje ostaje vidljivo", 
   await page.mouse.up();
   await expect(page.getByRole("alert")).toContainText("nije kompatibilan");
   await expect(card(page, "D1")).toHaveAttribute("data-offset", "0");
-  await page.getByRole("button", { name: "Izmeni dužinu zida" }).click();
+  await page.getByRole("button", { name: "Okviri i mere" }).click();
   await page.getByLabel("Dužina zida (mm)").fill("1200");
-  await saveModal(page);
+  await page.getByRole("button", { name: "Sačuvaj prikaz" }).click();
   await expect(page.getByRole("alert")).toContainText("prelaze zid za 60 cm");
   await expect(card(page, "D3")).toHaveClass(/out-of-bounds/);
   await expect(page.locator('.elevation-hit[data-width="600"]')).toHaveCount(3);
@@ -316,9 +316,9 @@ test("prevlačenje na prekratak zid upozorava pre i posle ispuštanja bez smanje
 }) => {
   await fresh(page);
   await page.getByRole("button", { name: "Zid B", exact: true }).click();
-  await page.getByRole("button", { name: "Izmeni dužinu zida" }).click();
+  await page.getByRole("button", { name: "Okviri i mere" }).click();
   await page.getByLabel("Dužina zida (mm)").fill("500");
-  await saveModal(page);
+  await page.getByRole("button", { name: "Sačuvaj prikaz" }).click();
   await page.getByRole("button", { name: "Zid A", exact: true }).click();
   const session = await context.newCDPSession(page),
     from = await point(card(page, "D2")),

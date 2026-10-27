@@ -1,5 +1,6 @@
 import { templates } from "./catalog";
 import type {
+  ElementKind,
   Hardware,
   KitchenElement,
   Panel,
@@ -9,13 +10,12 @@ import type {
 } from "./types";
 import {
   frontOverhang,
-  standardWall,
+  upperCabinet,
   validPushRule,
   wallFrontHeight,
   verticalGola,
   componentErrors,
   kitQuantities,
-  horizontalGolaKinds,
 } from "./opening";
 export const hingesForHeight = (h: number) =>
   h <= 900 ? 2 : h <= 1600 ? 3 : h <= 2000 ? 4 : 5;
@@ -24,7 +24,12 @@ export function construct(
   sel: Selection,
   s: Settings,
   products: Product[] = [],
-) {
+): {
+  panels: Panel[];
+  hardware: Hardware[];
+  warnings: string[];
+  errors: string[];
+} {
   const panels: Panel[] = [],
     hardware: Hardware[] = [],
     warnings: string[] = [],
@@ -39,13 +44,34 @@ export function construct(
       sel.frontOverhang > 100)
   )
     errors.push("Prepust fronta mora biti ceo broj od 1 do 100 mm.");
-  if (!template || template.unsupported)
+  if (!template)
     return {
       panels,
       hardware,
       warnings,
-      errors: [template?.rule || "Precizan obračun nije dostupan za ovaj tip elementa."],
+      errors: ["Precizan obračun nije dostupan za ovaj tip elementa."],
     };
+  if (template.unsupported) {
+    // No dedicated rule: price with the general model of the closest cabinet type.
+    const kind: ElementKind =
+      e.doors === 0 && e.drawers === 0 && e.shelves === 0
+        ? "panel"
+        : template.group === "Gornji" || template.group === "Most"
+          ? "wall2"
+          : template.group === "Visoki"
+            ? "tall"
+            : e.drawers > 0
+              ? "drawer3"
+              : "base2";
+    const general = construct({ ...e, kind }, sel, s, products);
+    return {
+      ...general,
+      warnings: [
+        ...general.warnings,
+        "Obračun po opštem modelu konstrukcije; proveriti prema stvarnom proizvodu.",
+      ],
+    };
+  }
   const { width: w, height: h, depth: d } = e,
     t = s.thickness,
     b = s.backThickness,
@@ -114,80 +140,38 @@ export function construct(
   const tall = ["tall", "fridge", "tallOven"].includes(e.kind);
   const drawer = e.kind.startsWith("drawer");
   const gola = sel.opening === "gola";
-  const extension = frontOverhang(e, sel);
-  if (
-    sel.opening === "overhang" &&
-    (!standardWall(e) ||
-      !Number.isFinite(extension) ||
-      !Number.isInteger(extension) ||
-      extension < 1 ||
-      extension > 100)
-  )
-    errors.push(
-      "Prepušteni front: podržana su standardna viseća vrata, sa prepustom 1–100 mm.",
-    );
-  if (
-    tall &&
-    (e.kind !== "tall" ||
-      (e.visual?.appliance &&
-        !["auto", "none"].includes(e.visual.appliance))) &&
-    sel.opening === "push"
-  )
-    errors.push(
-      "Push: za izabrani visoki/aparatski element nije definisano pouzdano pravilo otvaranja.",
-    );
-  const golaCompatible = horizontalGolaKinds.includes(e.kind);
+  // No opening system is blocked: every element may use the options of its row.
   const vg = gola ? verticalGola(e, sel, products) : null;
-  if (
-    (vg ||
-      (sel.opening === "push" &&
-        (standardWall(e) || tall || e.kind === "lift"))) &&
-    (!Number.isInteger(e.doors) || e.doors < 1 || e.doors > 4)
-  )
-    errors.push("Sistem otvaranja zahteva 1–4 vrata prema pravilu modela.");
-  if (gola && !golaCompatible && !vg && e.kind !== "open" && e.kind !== "oven")
-    errors.push(
-      tall
-        ? "Vertikalna GOLA: za ovaj visoki ormar nije definisan kompatibilan profil. Izaberite profil sa pravilom ili ručke."
-        : "GOLA: podržani su standardni donji elementi, element za sudoperu i fiokari. Izaberite ručke za ostale konstrukcije.",
-    );
+  const golaCompatible = gola && !vg && e.kind !== "open" && e.kind !== "oven";
   if (vg) {
     const r = vg.rule,
       length = h - r.top - r.bottom;
-    if (
-      h > r.maxHeight ||
-      w > r.maxWidth ||
-      length <= 0 ||
-      w - 2 * g - r.frontInset * r.profiles <= 0
-    )
-      errors.push(
-        "Vertikalna GOLA: dimenzije izlaze iz definisanog pravila profila.",
-      );
     const end = products.find((p) => p.id === r.end);
-    if (r.ends > 0 && (end?.category !== "golaEnd" || end.unit !== "kom"))
-      errors.push("Vertikalna GOLA: nedostaje odgovarajući završetak profila.");
-    errors.push(
-      ...componentErrors(r.components, products, [vg.product.id, r.end]),
-    );
+    const endOk = end?.category === "golaEnd" && end.unit === "kom";
+    const componentsOk = !componentErrors(r.components, products, [
+      vg.product.id,
+      r.end,
+    ]).length;
     hw(
       vg.product.id,
       (Math.max(0, length) / 1000) * r.profiles,
       "Vertikalni GOLA profil",
     );
-    hw(r.end, r.ends * r.profiles, "Završeci vertikalne GOLA");
-    hardware.push(
-      ...kitQuantities(
-        r.components,
-        e.doors,
-        e.doors *
-          hingesForHeight(
-            (h - 2 * g - (e.doors - 1) * g) / Math.max(1, e.doors),
-          ),
-        r.profiles,
-      ),
-    );
+    if (endOk) hw(r.end, r.ends * r.profiles, "Završeci vertikalne GOLA");
+    if (componentsOk)
+      hardware.push(
+        ...kitQuantities(
+          r.components,
+          e.doors,
+          e.doors *
+            hingesForHeight(
+              (h - 2 * g - (e.doors - 1) * g) / Math.max(1, e.doors),
+            ),
+          r.profiles,
+        ),
+      );
   }
-  const topInset = gola && golaCompatible ? 30 : 0;
+  const topInset = golaCompatible ? 30 : 0;
   panel("Leva stranica", d, h, 1, sel.body, edge(d, h));
   panel("Desna stranica", d, h, 1, sel.body, edge(d, h));
   panel(
@@ -275,70 +259,26 @@ export function construct(
       );
     }
   } else if (e.doors > 0 && e.kind !== "open" && e.kind !== "oven") {
-    if (!Number.isInteger(e.doors) || e.doors > 4)
-      errors.push("Broj vrata mora biti od 1 do 4.");
     const vertical = tall;
     const availableHeight =
-      sel.opening === "overhang" && standardWall(e)
+      sel.opening === "overhang" && upperCabinet(e)
         ? wallFrontHeight(e, sel, g)
         : h - 2 * g - topInset - (e.kind === "tallOven" ? 600 : 0);
     let pushPerDoor = 1;
     let pushRule: Product["pushRule"];
-    if (
-      sel.opening === "push" &&
-      (standardWall(e) || tall || e.kind === "lift")
-    ) {
+    if (sel.opening === "push") {
+      // Compatibility limits are not enforced; a complete rule only adds its kit parts.
       const model = products.find((p) => p.id === sel.push),
         rule = model?.pushRule;
       if (
-        model?.category !== "push" ||
-        !["kom", "komplet"].includes(model.unit) ||
-        !validPushRule(rule)
-      )
-        errors.push(
-          "Push: model nema definisano pouzdano pravilo količine i kompatibilnosti.",
-        );
-      else if (rule) {
+        rule &&
+        model?.category === "push" &&
+        ["kom", "komplet"].includes(model.unit) &&
+        validPushRule(rule) &&
+        !componentErrors(rule.components, products).length
+      ) {
         pushRule = rule;
         pushPerDoor = rule.perDoor;
-        if (!rule.kinds.includes(e.kind as "wall1" | "wall2" | "tall" | "lift"))
-          errors.push(
-            "Push: za ovu konstrukciju nije definisano pouzdano pravilo modela.",
-          );
-        const hinge = products.find((p) => p.id === sel.hinge);
-        if (
-          e.kind !== "lift" &&
-          (hinge?.category !== "hinge" ||
-            hinge.unit !== "kom" ||
-            !rule.hinges.includes(sel.hinge))
-        )
-          errors.push(
-            "Push: izabrane šarke/usporivači nisu potvrđeni kao kompatibilni sa ovim modelom.",
-          );
-        if (
-          e.kind === "lift" &&
-          (!rule.lifts?.includes(sel.lift) ||
-            products.find((p) => p.id === sel.lift)?.category !== "lift" ||
-            products.find((p) => p.id === sel.lift)?.unit !== "komplet")
-        )
-          errors.push(
-            "Push: izabrani podizni mehanizam nema definisano kompatibilno pravilo.",
-          );
-        errors.push(...componentErrors(rule.components, products));
-        const frontH = tall
-          ? (availableHeight - (e.doors - 1) * g) / e.doors
-          : availableHeight;
-        const frontW = tall ? w - 2 * g : (w - (e.doors + 1) * g) / e.doors;
-        if (
-          frontH > rule.maxHeight ||
-          frontW > rule.maxWidth ||
-          frontH < (rule.minHeight ?? 0) ||
-          frontW < (rule.minWidth ?? 0) ||
-          g < rule.minGap
-        )
-          errors.push(
-            "Push: dimenzije fronta ili zazor izlaze iz definisanog pravila modela.",
-          );
       }
     }
     let hingeQuantity = 0;
@@ -367,7 +307,7 @@ export function construct(
         ...kitQuantities(pushRule.components, e.doors, hingeQuantity),
       );
   }
-  if (gola && golaCompatible) {
+  if (golaCompatible) {
     const runs = drawer ? e.drawers : 1;
     hw(sel.gola, (w / 1000) * runs, "GOLA profil");
     hw(sel.golaEnd, runs * 2, "Završeci GOLA");

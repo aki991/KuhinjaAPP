@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { Minus, Plus, Scan, Settings2, Maximize, X } from "lucide-react";
+import { Scan, Maximize, X } from "lucide-react";
 import {
   elevationCamera,
   containedElevationCamera,
@@ -10,6 +10,7 @@ import type { LayoutItem, LayoutLane, KitchenWall } from "../../core/types";
 import type { DragView } from "../useLayoutDrag";
 import { HeightDimension, dimensionChains } from "./Dimensions";
 import WallElevation from "./WallElevation";
+import { objectNames } from "./WallSettingsEditor";
 
 export default function ElevationViewport({
   scene,
@@ -18,7 +19,6 @@ export default function ElevationViewport({
   selected,
   drag,
   onSelect,
-  onSettings,
   fullscreen = false,
   onFullscreen,
   onCloseFullscreen,
@@ -26,6 +26,7 @@ export default function ElevationViewport({
   onChooseWall,
   focusRequest = 0,
   onTopView,
+  onObject,
 }: {
   scene: ElevationScene;
   scale: number;
@@ -33,7 +34,6 @@ export default function ElevationViewport({
   selected: string | null;
   drag: DragView | null;
   onSelect: (e: LayoutItem) => void;
-  onSettings: () => void;
   fullscreen?: boolean;
   onFullscreen?: () => void;
   onCloseFullscreen?: () => void;
@@ -41,6 +41,7 @@ export default function ElevationViewport({
   onChooseWall?: (id: string) => void;
   focusRequest?: number;
   onTopView?: () => void;
+  onObject?: (id: string) => void;
 }) {
   const frame = useRef<HTMLDivElement>(null),
     anchor = useRef<{ x: number; y: number; px?: number; py?: number } | null>(
@@ -272,26 +273,6 @@ export default function ElevationViewport({
       node.removeEventListener("touchcancel", end);
     };
   }, []);
-  function zoomBy(factor: number) {
-    const node = frame.current;
-    if (node)
-      anchor.current = {
-        x: (node.scrollLeft + box.width / 2 - margin.left) / actual,
-        y:
-          scene.height -
-          (node.scrollTop + camera.viewportHeight / 2 - margin.top) / actual,
-      };
-    setFitAll(false);
-    setZoom((z) =>
-      Math.max(
-        0.02,
-        Math.min(
-          0.65 / normalCamera.fitted,
-          (fitAll ? actual / normalCamera.fitted : z) * factor,
-        ),
-      ),
-    );
-  }
   const floor = margin.top + scene.height * actual,
     baseTop = margin.top + (scene.height - scene.baseTop) * actual,
     wallBottom = margin.top + (scene.height - scene.upperBottom) * actual;
@@ -313,22 +294,6 @@ export default function ElevationViewport({
               <X size={21} />
             </button>
           )}
-          <button
-            className="icon-btn"
-            aria-label="Umanji 2D prikaz"
-            disabled={actual <= normalCamera.fitted * 0.02}
-            onClick={() => zoomBy(1 / 1.3)}
-          >
-            <Minus size={20} />
-          </button>
-          <button
-            className="icon-btn"
-            aria-label="Uvećaj 2D prikaz"
-            disabled={actual >= 0.65}
-            onClick={() => zoomBy(1.3)}
-          >
-            <Plus size={20} />
-          </button>
           <button
             className="text-btn"
             onClick={() => {
@@ -373,40 +338,8 @@ export default function ElevationViewport({
             >
               <Maximize size={21} />
             </button>
-            <button
-              className="icon-btn"
-              aria-label="Otvori i mere 2D prikaza"
-              onClick={onSettings}
-            >
-              <Settings2 size={21} />
-            </button>
           </div>
         )}
-        <span className="elevation-free-space">
-          Slobodno: donji{" "}
-          {Math.max(
-            0,
-            scene.length -
-              Math.max(
-                0,
-                ...scene.entries
-                  .filter((e) => e.row === "base")
-                  .map((e) => e.rect.x + e.rect.width),
-              ),
-          )}{" "}
-          mm · viseći{" "}
-          {Math.max(
-            0,
-            scene.length -
-              Math.max(
-                0,
-                ...scene.entries
-                  .filter((e) => e.row === "wall")
-                  .map((e) => e.rect.x + e.rect.width),
-              ),
-          )}{" "}
-          mm
-        </span>
         {fullscreen && onTopView && (
           <button className="text-btn" onClick={onTopView}>
             Odozgo
@@ -446,6 +379,41 @@ export default function ElevationViewport({
               rulers={false}
               showDimensions={showDimensions}
             />
+            {onObject && (
+              <div className="elevation-object-hits">
+                {scene.objects.map((o, index) => {
+                  const r = toScreen(
+                    { x: o.x, y: o.bottom, width: o.width, height: o.height },
+                    actual,
+                    scene.height,
+                    margin,
+                  );
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      className="elevation-hit object-hit"
+                      data-object-id={o.id}
+                      aria-label={`${objectNames[o.kind]} ${index + 1}. Podešavanja`}
+                      style={{
+                        left: r.x,
+                        top: r.y,
+                        width: Math.max(12, r.width),
+                        height: Math.max(12, r.height),
+                      }}
+                      onContextMenu={(ev) => ev.preventDefault()}
+                      onClick={() => {
+                        if (
+                          !lastPinch.current ||
+                          performance.now() - lastPinch.current > 400
+                        )
+                          onObject(o.id);
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
             {(["wall", "base", "extra"] as LayoutLane[]).map((row) => {
               const emptyUpper =
                 row === "wall" && !scene.entries.some((e) => e.row === "wall");

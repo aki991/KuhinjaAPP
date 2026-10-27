@@ -24,18 +24,46 @@ afterEach(async () => {
   for (const d of databases.splice(0)) await d.delete();
 });
 describe("Trajna lokalna baza", () => {
+  it("čuva elemente iz priloga i vraća ih iz rezervne kopije", async () => {
+    const a = database(),
+      b = database();
+    await seedDatabase(a);
+    const offer = ensureLayout(createOffer());
+    const reference = newElement("reference002");
+    reference.placement = { wall: "A", row: "base", offset: 0, order: 0 };
+    offer.elements = [reference];
+    expect(await persistProject(offer, a)).toBe(true);
+    expect(
+      (await a.templates.get("1.0.0"))?.rules.some(
+        (r) => r.kind === "reference092",
+      ),
+    ).toBe(true);
+    await restoreBackup(JSON.parse(JSON.stringify(await exportBackup(a))), b);
+    expect((await b.offers.get(offer.id))?.elements[0]).toMatchObject({
+      kind: "reference002",
+      width: reference.width,
+      height: reference.height,
+    });
+  });
   it("čuva nepotpun novi tip i format dobavljača u bazi i rezervnoj kopiji", async () => {
-    const a = database(), b = database();
+    const a = database(),
+      b = database();
     const offer = ensureLayout(createOffer());
     const cargo = newElement("baseCargo");
     cargo.placement = { wall: "A", row: "base", offset: 0, order: 0 };
     offer.elements = [cargo];
     expect(await persistProject(offer, a)).toBe(true);
     expect((await a.offers.get(offer.id))!.elements[0].kind).toBe("baseCargo");
-    await a.meta.put({ id: "import-format:stolar", value: { supplier: "Stolar", mapping: { Šifra: "SKU" } } });
+    await a.meta.put({
+      id: "import-format:stolar",
+      value: { supplier: "Stolar", mapping: { Šifra: "SKU" } },
+    });
     await restoreBackup(JSON.parse(JSON.stringify(await exportBackup(a))), b);
     expect((await b.offers.get(offer.id))!.elements[0].kind).toBe("baseCargo");
-    expect((await b.meta.get("import-format:stolar"))?.value).toEqual({ supplier: "Stolar", mapping: { Šifra: "SKU" } });
+    expect((await b.meta.get("import-format:stolar"))?.value).toEqual({
+      supplier: "Stolar",
+      mapping: { Šifra: "SKU" },
+    });
   });
   it("izgled, fotografije dekora, RAL, ručice i debljina ploče preživljavaju JSON i ponovno otvaranje", async () => {
     const a = database(),
@@ -100,7 +128,8 @@ describe("Trajna lokalna baza", () => {
     databases.push(d);
     await d.open();
     const saved = (await d.offers.get(o.id))!;
-    expect(saved.elements).toEqual(original.elements);
+    // v10 keeps only the element's own opening instead of locking its materials.
+    expect(saved.elements).toEqual(((els: typeof original.elements) => els.map((e) => (e.locked ? { ...e, locked: false, ownOpening: true } : e)))(original.elements));
     expect(saved.selection).toEqual(original.selection);
     expect(saved.prices.map((p) => p.price)).toEqual(
       original.prices.map((p) => p.price),
@@ -182,7 +211,7 @@ describe("Trajna lokalna baza", () => {
     databases.push(d);
     await d.open();
     const migrated = (await d.offers.get(o.id))!;
-    expect(migrated.elements).toEqual(original.elements);
+    expect(migrated.elements).toEqual(((els: typeof original.elements) => els.map((e) => (e.locked ? { ...e, locked: false, ownOpening: true } : e)))(original.elements));
     expect(migrated.selection).toMatchObject({
       wallOpening: "handles",
       tallOpening: "handles",
@@ -399,6 +428,11 @@ describe("Trajna lokalna baza", () => {
     const migrated = new KitchenDB(name);
     databases.push(migrated);
     await migrated.open();
+    expect(
+      (await migrated.templates.get("library-1.2"))?.rules.some(
+        (r) => r.kind === "reference092",
+      ),
+    ).toBe(true);
     let saved = (await migrated.offers.get(o.id))!;
     expect(saved.layout!.spacers!.map((s) => s.width)).toEqual([100, 200]);
     expect(saved.variants[0].layout!.spacers!.map((s) => s.width)).toEqual([

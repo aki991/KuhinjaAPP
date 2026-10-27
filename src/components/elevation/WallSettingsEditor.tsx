@@ -3,7 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { uid } from "../../core/catalog";
 import type { ElevationConfig, WallObject } from "../../core/types";
 import { Field, Modal } from "../UI";
-const names = {
+export const objectNames = {
   window: "Prozor",
   door: "Vrata",
   column: "Stub",
@@ -12,33 +12,81 @@ const names = {
 export default function WallSettingsEditor({
   config,
   wall,
+  wallLength,
+  shape: initialShape,
+  shapes,
+  affectedBy,
   onSave,
   onClose,
 }: {
   config: ElevationConfig;
   wall: string;
-  onSave: (v: ElevationConfig) => void;
+  wallLength: number;
+  shape: string;
+  shapes: string[];
+  affectedBy: (shape: string) => number;
+  onSave: (v: ElevationConfig, length: number, shape: string) => void;
   onClose: () => void;
 }) {
   const [value, setValue] = useState(() => structuredClone(config));
+  const [length, setLength] = useState(wallLength);
+  const [shape, setShape] = useState(initialShape),
+    [confirmMove, setConfirmMove] = useState(false);
+  const affected = shape !== initialShape ? affectedBy(shape) : 0;
   const update = (id: string, patch: Partial<WallObject>) =>
     setValue((v) => ({
       ...v,
       objects: v.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
     }));
   return (
-    <Modal title="Otvori i mere" onClose={onClose}>
+    <Modal title="Okviri i mere" onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onSave(value);
+          if (affected && !confirmMove) return;
+          onSave(value, length, shape);
           onClose();
         }}
       >
+        <Field label="Prostor (tip kuhinje)">
+          <select
+            value={shape}
+            onChange={(e) => {
+              setShape(e.target.value);
+              setConfirmMove(false);
+            }}
+          >
+            {shapes.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+        </Field>
+        {!!affected && (
+          <label className="layout-warning">
+            <input
+              type="checkbox"
+              checked={confirmMove}
+              onChange={(e) => setConfirmMove(e.target.checked)}
+            />{" "}
+            Premeštam {affected} stavki sa uklonjenih zidova na zid A; proveriću
+            raspored i prepreke.
+          </label>
+        )}
         <p className="muted">
           Položaji se mere od početka izabranog zida i od poda.
         </p>
         <div className="form-grid">
+          <Field label="Dužina zida (mm)">
+            <input
+              type="number"
+              inputMode="numeric"
+              required
+              min={100}
+              max={30000}
+              value={length || ""}
+              onChange={(e) => setLength(Number(e.target.value))}
+            />
+          </Field>
           {(
             [
               ["toeKick", "Visina nogica (mm)", 0, 500],
@@ -66,7 +114,7 @@ export default function WallSettingsEditor({
           .filter((o) => o.wall === wall)
           .map((o) => (
             <fieldset className="wall-object-editor" key={o.id}>
-              <legend>{names[o.kind]}</legend>
+              <legend>{objectNames[o.kind]}</legend>
               <div className="form-grid">
                 {(
                   [
@@ -94,7 +142,7 @@ export default function WallSettingsEditor({
               <button
                 className="text-btn"
                 type="button"
-                aria-label={`Obriši ${names[o.kind].toLowerCase()}`}
+                aria-label={`Obriši ${objectNames[o.kind].toLowerCase()}`}
                 onClick={() =>
                   setValue({
                     ...value,
@@ -107,7 +155,7 @@ export default function WallSettingsEditor({
             </fieldset>
           ))}
         <div className="wall-object-add">
-          {(Object.keys(names) as WallObject["kind"][]).map((kind) => (
+          {(Object.keys(objectNames) as WallObject["kind"][]).map((kind) => (
             <button
               type="button"
               className="btn"
@@ -137,15 +185,89 @@ export default function WallSettingsEditor({
               }
             >
               <Plus size={18} />
-              {names[kind]}
+              {objectNames[kind]}
             </button>
           ))}
         </div>
         <div className="editor-save">
-          <button type="submit" className="btn primary full">
+          <button
+            type="submit"
+            className="btn primary full"
+            disabled={!!affected && !confirmMove}
+          >
             Sačuvaj prikaz
           </button>
         </div>
+      </form>
+    </Modal>
+  );
+}
+
+export function WallObjectEditor({
+  object,
+  wallLength,
+  wallHeight,
+  onSave,
+  onDelete,
+  onClose,
+}: {
+  object: WallObject;
+  wallLength: number;
+  wallHeight: number;
+  onSave: (o: WallObject) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState(object);
+  return (
+    <Modal title={objectNames[object.kind]} onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSave(value);
+          onClose();
+        }}
+      >
+        <div className="form-grid">
+          {(
+            [
+              ["x", "Od početka zida (mm)", 0, wallLength],
+              ["width", "Širina (mm)", 1, wallLength],
+              ["height", "Visina (mm)", 1, wallHeight],
+              ["bottom", "Donja ivica od poda (mm)", 0, wallHeight],
+            ] as const
+          ).map(([key, label, min, max]) => (
+            <Field key={key} label={label}>
+              <input
+                type="number"
+                inputMode="numeric"
+                required
+                min={min}
+                max={max}
+                value={value[key]}
+                onChange={(e) =>
+                  setValue({ ...value, [key]: Number(e.target.value) })
+                }
+              />
+            </Field>
+          ))}
+        </div>
+        <div className="editor-save">
+          <button type="submit" className="btn primary full">
+            Sačuvaj
+          </button>
+        </div>
+        <button
+          type="button"
+          className="btn full"
+          aria-label={`Obriši ${objectNames[object.kind].toLowerCase()}`}
+          onClick={() => {
+            onDelete();
+            onClose();
+          }}
+        >
+          <Trash2 size={18} /> Obriši
+        </button>
       </form>
     </Modal>
   );

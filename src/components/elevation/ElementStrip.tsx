@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { rowOf, isSpacer } from "../../core/layout";
+import { rowOf, isSpacer, isBridge } from "../../core/layout";
+const groupOf = (e: LayoutItem) =>
+  isBridge(e)
+    ? "Most"
+    : { base: "Donji", wall: "Viseći", tall: "Visoki", extra: "Ostali" }[
+        rowOf(e)
+      ];
 import type { LayoutItem } from "../../core/types";
 import type { ElevationScene } from "../../core/elevation";
 import ElementSVG from "./ElementSVG";
@@ -23,16 +29,8 @@ export default function ElementStrip({
     root = useRef<HTMLDivElement>(null);
   const groups = useMemo(
     () =>
-      ["Donji", "Viseći", "Visoki", "Ostali"].filter((g) =>
-        items.some(
-          (e) =>
-            ({
-              base: "Donji",
-              wall: "Viseći",
-              tall: "Visoki",
-              extra: "Ostali",
-            })[rowOf(e)] === g,
-        ),
+      ["Donji", "Viseći", "Visoki", "Most", "Ostali"].filter((g) =>
+        items.some((e) => groupOf(e) === g),
       ),
     [items],
   );
@@ -82,13 +80,7 @@ export default function ElementStrip({
         {items
           .filter(
             (e) =>
-              filter === "Svi" ||
-              {
-                base: "Donji",
-                wall: "Viseći",
-                tall: "Visoki",
-                extra: "Ostali",
-              }[rowOf(e)] === filter,
+              filter === "Svi" || groupOf(e) === filter,
           )
           .map((item) => {
             const entry = scene.entries.find((e) => e.id === item.id)!;

@@ -1,15 +1,27 @@
 import { isSpacer, rowOf } from "../../core/layout";
 import type { ElevationEntry, Rect } from "../../core/elevation";
 import { ApplianceSVG } from "./ApplianceSVG";
-import { horizontalGolaKinds } from "../../core/opening";
 import { useId, type CSSProperties } from "react";
 import type { ElementKind } from "../../core/types";
+import { templates } from "../../core/catalog";
+import ReferenceArtwork from "./ReferenceArtwork";
 const specialLabel: Partial<Record<ElementKind, string>> = {
-  baseCargo: "CARGO", tallCargo: "CARGO", wallHood: "NAPA",
-  wallCorner: "L", corner: "L", cornerBlind: "SLEPI", bar: "ŠANK",
-  freeFridge: "FRIŽ.", freeStove: "ŠPORET", freeDishwasher: "SUD.",
-  dishwasherBuilt: "SUD.", tallFreezer: "ZAMRZ.", tallOvenMicrowave: "R+M",
-  wallBridgeFridge: "MOST", wallBridgeOven: "MOST", islandBack: "OBLOGA",
+  baseCargo: "CARGO",
+  tallCargo: "CARGO",
+  wallHood: "NAPA",
+  wallCorner: "L",
+  corner: "L",
+  cornerBlind: "SLEPI",
+  bar: "ŠANK",
+  freeFridge: "FRIŽ.",
+  freeStove: "ŠPORET",
+  freeDishwasher: "SUD.",
+  dishwasherBuilt: "SUD.",
+  tallFreezer: "ZAMRZ.",
+  tallOvenMicrowave: "R+M",
+  wallBridgeFridge: "MOST",
+  wallBridgeOven: "MOST",
+  islandBack: "OBLOGA",
 };
 function Door({
   x,
@@ -125,9 +137,19 @@ export default function ElementSVG({
   const { width: w, height: h } = r,
     spacer = isSpacer(e.item),
     handles = e.opening === "handles",
-    item = isSpacer(e.item) ? null : e.item,
+    originalItem = isSpacer(e.item) ? null : e.item,
+    reference = originalItem?.kind.startsWith("reference")
+      ? templates.find((t) => t.kind === originalItem.kind)
+      : undefined,
+    item =
+      originalItem && reference?.constructionKind
+        ? { ...originalItem, kind: reference.constructionKind }
+        : originalItem,
     gola =
-      !!item && e.opening === "gola" && horizontalGolaKinds.includes(item.kind),
+      !!item &&
+      e.opening === "gola" &&
+      !e.verticalProfile &&
+      !["open", "baseOpen", "oven"].includes(item.kind),
     gap = Math.min(1.3, w * 0.02, h * 0.02),
     innerW = Math.max(1, w - 2 * gap),
     innerH = Math.max(1, h - 2 * gap);
@@ -135,6 +157,16 @@ export default function ElementSVG({
   if (spacer)
     content = (
       <rect width={w} height={h} className="technical-spacer" fill="none" />
+    );
+  else if (item && reference && !reference.constructionKind)
+    content = (
+      <ReferenceArtwork
+        kind={item.kind}
+        width={w}
+        height={h}
+        handles={handles}
+        mirror={item.doors === 1 && item.visual?.hinge === "right"}
+      />
     );
   else if (
     item!.kind === "worktop" ||
@@ -194,7 +226,7 @@ export default function ElementSVG({
               x={gap}
               y={gap + i * dh}
               width={drawerWidth}
-              height={Math.max(1, dh - gap)}
+              height={Math.max(1, dh - (i < n - 1 ? gap : 0))}
               fill="#f3e5c8"
               className="front-frame"
             />
@@ -203,7 +235,10 @@ export default function ElementSVG({
               x={gap + Math.min(3, dh * 0.1)}
               y={gap + i * dh + Math.min(3, dh * 0.1)}
               width={Math.max(1, drawerWidth - 2 * Math.min(3, dh * 0.1))}
-              height={Math.max(1, dh - gap - 2 * Math.min(3, dh * 0.1))}
+              height={Math.max(
+                1,
+                dh - (i < n - 1 ? gap : 0) - 2 * Math.min(3, dh * 0.1),
+              )}
               fill="#f8edd7"
               className="front-inset"
             />
@@ -213,7 +248,10 @@ export default function ElementSVG({
                 d={`M${drawerWidth * 0.37} ${gap + i * dh + Math.min(7, dh * 0.3)}h${drawerWidth * 0.26}`}
               />
             )}
-            <path d={`M${gap} ${gap + i * dh}H${drawerWidth + gap}`} fill="none" />
+            <path
+              d={`M${gap} ${gap + i * dh}H${drawerWidth + gap}`}
+              fill="none"
+            />
             {gola && (
               <rect
                 data-gola="horizontal"
@@ -227,8 +265,16 @@ export default function ElementSVG({
             )}
           </g>
         ))}
-        {mixed && <Door x={gap + drawerWidth} y={gap} width={Math.max(1, innerW - drawerWidth)}
-          height={innerH} hinge="right" handles={handles} />}
+        {mixed && (
+          <Door
+            x={gap + drawerWidth}
+            y={gap}
+            width={Math.max(1, innerW - drawerWidth)}
+            height={innerH}
+            hinge={item!.visual?.hinge || "right"}
+            handles={handles}
+          />
+        )}
       </>
     );
   } else {
@@ -258,21 +304,31 @@ export default function ElementSVG({
                   e.frontOverhang * (h / e.rect.height) +
                   (e.frontOverhang > 0 ? gap : 0),
               stackedLift = ["liftDouble", "liftFolding"].includes(item!.kind),
-              actualFh = stackedLift ? innerH / count : fh,
-              fw = tall || stackedLift ? innerW : innerW / count,
-              x = tall || stackedLift ? gap : gap + i * fw,
-              y = stackedLift ? gap + i * actualFh : tall
-                ? gap +
-                  i * fh +
-                  (oven && i >= Math.ceil(count / 2) ? openingH : 0)
-                : gap;
+              actualFh = stackedLift
+                ? (innerH - gap * (count - 1)) / count
+                : fh,
+              fw =
+                tall || stackedLift
+                  ? innerW
+                  : (innerW - gap * (count - 1)) / count,
+              x = tall || stackedLift ? gap : gap + i * (fw + gap),
+              y = stackedLift
+                ? gap + i * (actualFh + gap)
+                : tall
+                  ? gap +
+                    i * fh +
+                    (oven && i >= Math.ceil(count / 2) ? openingH : 0)
+                  : gap;
             return (
               <Door
                 key={i}
                 x={x}
                 y={y}
-                width={Math.max(1, fw - gap)}
-                height={Math.max(1, actualFh - (e.frontOverhang > 0 ? 0 : gap))}
+                width={Math.max(1, fw)}
+                height={Math.max(
+                  1,
+                  actualFh - (tall && i < count - 1 ? gap : 0),
+                )}
                 hinge={
                   count === 1
                     ? item!.visual?.hinge || "left"
@@ -282,7 +338,9 @@ export default function ElementSVG({
                 }
                 handles={handles}
                 glass={!!item!.visual?.glass}
-                lift={["lift", "liftDouble", "liftFolding"].includes(item!.kind)}
+                lift={["lift", "liftDouble", "liftFolding"].includes(
+                  item!.kind,
+                )}
                 upper={e.row === "wall"}
                 position={e.handlePosition}
               />
@@ -358,18 +416,39 @@ export default function ElementSVG({
       )}
       <g transform={`translate(${r.x} ${r.y})`}>
         {content}
-      {item && specialLabel[item.kind] && (
-        <g className="technical-special" pointerEvents="none">
-          {(["corner", "cornerBlind", "wallCorner"].includes(item.kind)) &&
-            <path d={`M1 ${h - 1}L${w * 0.34} ${h - 1}L${w * 0.34} ${h * 0.65}L${w - 1} ${h * 0.65}`} fill="none" stroke="#735c43" strokeWidth="1.5" />}
-          {(["baseCargo", "tallCargo"].includes(item.kind)) &&
-            [0.3, 0.5, 0.7].map((v) => <path key={v} d={`M${w * 0.2} ${h * v}h${w * 0.6}`} stroke="#735c43" fill="none" />)}
-          <text x={w / 2} y={h * 0.58} textAnchor="middle" fontSize={Math.max(5, Math.min(14, w * 0.16, h * 0.15))}
-            fill="#5d4733" stroke="white" strokeWidth="1.5" paintOrder="stroke">
-            {specialLabel[item.kind]}
-          </text>
-        </g>
-      )}
+        {item && specialLabel[item.kind] && (
+          <g className="technical-special" pointerEvents="none">
+            {["corner", "cornerBlind", "wallCorner"].includes(item.kind) && (
+              <path
+                d={`M1 ${h - 1}L${w * 0.34} ${h - 1}L${w * 0.34} ${h * 0.65}L${w - 1} ${h * 0.65}`}
+                fill="none"
+                stroke="#735c43"
+                strokeWidth="1.5"
+              />
+            )}
+            {["baseCargo", "tallCargo"].includes(item.kind) &&
+              [0.3, 0.5, 0.7].map((v) => (
+                <path
+                  key={v}
+                  d={`M${w * 0.2} ${h * v}h${w * 0.6}`}
+                  stroke="#735c43"
+                  fill="none"
+                />
+              ))}
+            <text
+              x={w / 2}
+              y={h * 0.58}
+              textAnchor="middle"
+              fontSize={Math.max(5, Math.min(14, w * 0.16, h * 0.15))}
+              fill="#5d4733"
+              stroke="white"
+              strokeWidth="1.5"
+              paintOrder="stroke"
+            >
+              {specialLabel[item.kind]}
+            </text>
+          </g>
+        )}
         {e.verticalProfile &&
           Array.from({ length: e.verticalProfile.count }, (_, i) => {
             const p = e.verticalProfile!,

@@ -1,3 +1,4 @@
+import { pinchZoom } from "./pinch";
 import { test, expect, type Page } from "@playwright/test";
 import { createOffer } from "../../src/core/db";
 import { ensureLayout } from "../../src/core/layout";
@@ -69,9 +70,7 @@ test("Uklopi u 360 px prikazuje celu kuhinju i kote bez horizontalnog ili vertik
   await page.setViewportSize({ width: 360, height: 800 });
   await load(page);
   const before = await state(page);
-  await page
-    .getByRole("button", { name: "Uvećaj 2D prikaz", exact: true })
-    .click();
+  await pinchZoom(page);
   await page.getByRole("button", { name: "Uklopi", exact: true }).click();
   const scroll = page.locator(".elevation-scroll");
   await expect(scroll).toHaveAttribute("data-fit-all", "true");
@@ -104,9 +103,7 @@ test("Uklopi u 360 px prikazuje celu kuhinju i kote bez horizontalnog ili vertik
       animations: "disabled",
     });
   }
-  await page
-    .getByRole("button", { name: "Uvećaj 2D prikaz", exact: true })
-    .click();
+  await pinchZoom(page);
   await expect(scroll).toHaveAttribute("data-fit-all", "false");
   await page.getByRole("button", { name: "Uklopi", exact: true }).click();
   await expect(scroll).toHaveAttribute("data-fit-all", "true");
@@ -124,6 +121,13 @@ test("pogled odozgo ima donji, viseći i ceo red, stvarne dubine i otvara isti e
   await expect(
     page.getByRole("img", { name: "Pogled kuhinje odozgo" }),
   ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Uvećaj|Umanji/ })).toHaveCount(0);
+  const topScroll = page.locator(".top-scroll");
+  const initialWidth = await topScroll.evaluate((e) => e.scrollWidth);
+  await pinchZoom(page, ".top-scroll");
+  await expect.poll(() => topScroll.evaluate((e) => e.scrollWidth)).toBeGreaterThan(initialWidth);
+  await page.getByRole("button", { name: "Uklopi", exact: true }).click();
+  await expect(topScroll).toHaveClass(/fitted/);
   const filter = page.getByRole("group", {
     name: "Elementi u pogledu odozgo",
     exact: true,

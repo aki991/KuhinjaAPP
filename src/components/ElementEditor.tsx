@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { LockKeyhole } from "lucide-react";
 import { categories, templates } from "../core/catalog";
-import { appendPlacement } from "../core/layout";
+import { referenceDescriptions } from "../core/reference-descriptions";
+import { appendPlacement, isBridge } from "../core/layout";
 import type {
   Category,
   KitchenElement,
@@ -11,38 +12,60 @@ import type {
   Settings,
   KitchenLayout,
   SelectionProductKey,
+  Offer,
 } from "../core/types";
 import { construct } from "../core/construction";
 import {
   effectiveSelection,
   standardWall,
+  upperCabinet,
   wallFrontHeight,
   tallCabinet,
 } from "../core/opening";
 import { pushSelection } from "../core/opening-kits";
 import PushSystemDialog from "./PushSystemDialog";
 import VerticalGolaSelect from "./VerticalGolaSelect";
-import { Cabinet, Field, Modal } from "./UI";
+import { Field, Modal } from "./UI";
+import LibraryThumbnail from "./elevation/LibraryThumbnail";
 export default function ElementEditor({
   element,
+  offer,
   products: initialProducts,
   global,
   settings,
   walls = [],
   elements = [],
   layout,
+  islandPlan,
+  isNew = false,
   onSave,
   onClose,
   actions,
 }: {
   element: KitchenElement;
+  offer: Offer;
   products: Product[];
   global: Selection;
   settings: Settings;
   walls?: KitchenWall[];
   elements?: KitchenElement[];
   layout?: KitchenLayout;
-  onSave: (e: KitchenElement, prices?: Product[]) => void;
+  isNew?: boolean;
+  islandPlan?: (
+    draft: KitchenElement,
+    pos?: { x: number; y: number } | null,
+  ) => {
+    x: number;
+    y: number;
+    width: number;
+    depth: number;
+    warnings: string[];
+  } | null;
+  onSave: (
+    e: KitchenElement,
+    prices?: Product[],
+    extra?: { islandPosition: { x: number; y: number } | null },
+  ) => void;
   onClose: () => void;
   actions?: ReactNode;
 }) {
@@ -53,7 +76,41 @@ export default function ElementEditor({
     [errors, setErrors] = useState<string[]>([]);
   const [products, setProducts] = useState(initialProducts),
     [pushDialog, setPushDialog] = useState(false);
+  const [island0] = useState(() => islandPlan?.(element) ?? null),
+    [pos, setPos] = useState({ x: island0?.x ?? 0, y: island0?.y ?? 0 }),
+    [auto, setAuto] = useState(!layout?.islandPosition);
+  const island = islandPlan
+    ? islandPlan(value, auto ? null : pos)
+    : null;
+  const lengthA = walls.find((w) => w.id === "A")?.length || 0,
+    lengthB = walls.find((w) => w.id === "B")?.length,
+    hasC = walls.some((w) => w.id === "C");
+  const shown = auto && island ? { x: island.x, y: island.y } : pos;
+  const setPosition = (next: Partial<typeof pos>) => {
+    setPos({ ...shown, ...next });
+    setAuto(false);
+  };
+  const distance = (
+    label: string,
+    amount: number,
+    onChange: (v: number) => void,
+    min?: number,
+  ) => (
+    <Field label={label}>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max="100000"
+        required
+        value={Number.isFinite(amount) ? amount : ""}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </Field>
+  );
   const t = templates.find((t) => t.kind === element.kind)!;
+  const description = referenceDescriptions[element.kind] ?? t.rule;
+  const canChangeHinge = value.doors === 1 && !["lift", "liftDouble", "liftFolding"].includes(value.kind) && !["fridge", "dishwasher", "oven"].includes(value.visual?.appliance || "");
   const numeric = (
     key:
       | "width"
@@ -97,7 +154,7 @@ export default function ElementEditor({
               [key]: e.target.value,
               ...(key === "front" ? { frontMode: "separate" as const } : {}),
             },
-            locked: true,
+            ...(key === "push" ? { ownOpening: true } : { locked: true }),
           })
         }
       >
@@ -128,27 +185,196 @@ export default function ElementEditor({
               settings,
               products,
             );
-            if (check.errors.length && !t.unsupported) {
+            if (check.errors.length) {
               setErrors(check.errors);
               return;
             }
-            onSave(value, products);
+            if (
+              island &&
+              !auto &&
+              ![pos.x, pos.y].every(
+                (v) => Number.isFinite(v) && v >= 0 && v <= 100000,
+              )
+            ) {
+              setErrors([
+                "Položaj od početka zidova mora biti između 0 i 100.000 mm.",
+              ]);
+              return;
+            }
+            onSave(
+              value,
+              products,
+              island ? { islandPosition: auto ? null : pos } : undefined,
+            );
             onClose();
           }}
         >
-          <div className="editor-drawing">
-            <Cabinet kind={value.kind} size={88} />
-            <span>Sve dimenzije u mm</span>
+          <div className="compact-element-editor">
+            <div className="editor-drawing">
+              <LibraryThumbnail element={value} offer={{ ...offer, prices: products }} />
+            </div>
+            <div className="compact-element-controls">
+              {actions}
+              <div className="field-grid">
+                {numeric("width", "Širina", value.kind.startsWith("reference") && t.width < 80 ? 10 : 80, 6000)}
+                {numeric("height", "Visina", 40, 3000)}
+              </div>
+              {island && (
+                <>
+                  {numeric("depth", "Dubina ostrva", 100, 3000)}
+                  {distance("Udaljenost od zida A (mm)", shown.y, (v) =>
+                    setPosition({ y: v }), 0)}
+                  {lengthB !== undefined ? (
+                    distance(
+                      "Udaljenost od zida B (mm)",
+                      Math.round(lengthA - shown.x - island.width),
+                      (v) => setPosition({ x: lengthA - island.width - v }),
+                    )
+                  ) : (
+                    distance(
+                      "Od početka zida A (mm)",
+                      shown.x,
+                      (v) => setPosition({ x: v }),
+                      0,
+                    )
+                  )}
+                  {hasC &&
+                    lengthB !== undefined &&
+                    distance(
+                      "Udaljenost od zida C (mm)",
+                      Math.round(lengthB - shown.y - island.depth),
+                      (v) => setPosition({ y: lengthB - island.depth - v }),
+                    )}
+                  <p className="field-hint">
+                    Udaljenosti su merene od zida do najbliže ivice ostrva.
+                    Negativna vrednost znači da ostrvo prelazi liniju zida.
+                  </p>
+                  {island.warnings.map((warning) => (
+                    <p className="layout-warning" key={warning}>
+                      {warning}
+                    </p>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    disabled={auto}
+                    onClick={() => setAuto(true)}
+                  >
+                    Automatski položaj
+                  </button>
+                </>
+              )}
+              <Field label="Smer otvaranja vrata">
+                <select disabled={!canChangeHinge} value={canChangeHinge ? value.visual?.hinge || (value.drawers > 0 ? "right" : "left") : "none"}
+                  onChange={(e) => setValue({ ...value, visual: { ...value.visual, hinge: e.target.value as "left" | "right" } })}>
+                  {!canChangeHinge && <option value="none">Nije primenljivo</option>}
+                  <option value="left">Levo</option>
+                  <option value="right">Desno</option>
+                </select>
+              </Field>
+            <Field label="Otvaranje">
+              <select
+                value={value.selection.opening}
+                onChange={(e) => {
+                  if (
+                    e.target.value === "push" &&
+                    (standardWall(value) ||
+                      tallCabinet(value) ||
+                      value.kind === "lift") &&
+                    construct(
+                      value,
+                      { ...value.selection, opening: "push" },
+                      settings,
+                      products,
+                    ).errors.length
+                  ) {
+                    setPushDialog(true);
+                    return;
+                  }
+                  setValue({
+                    ...value,
+                    ownOpening: true,
+                    selection: {
+                      ...value.selection,
+                      opening: e.target.value as Selection["opening"],
+                    },
+                  });
+                }}
+              >
+                <option value="handles">Klasične ručke</option>
+                {!upperCabinet(value) && (
+                  <option value="gola">
+                    {tallCabinet(value) ? "Vertikalna GOLA" : "GOLA profili"}
+                  </option>
+                )}
+                <option value="push">Push-to-open</option>
+                {upperCabinet(value) && (
+                  <option value="overhang">Prepušteni frontovi</option>
+                )}
+              </select>
+            </Field>
+            {tallCabinet(value) && value.selection.opening === "gola" && (
+              <VerticalGolaSelect
+                value={value.selection.verticalGola}
+                products={products}
+                onChange={(verticalGola, prices) => {
+                  setProducts(prices);
+                  setValue({
+                    ...value,
+                    ownOpening: true,
+                    selection: { ...value.selection, verticalGola },
+                  });
+                }}
+              />
+            )}
+            {value.selection.opening === "push" &&
+              (standardWall(value) ||
+                tallCabinet(value) ||
+                value.kind === "lift") && (
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => setPushDialog(true)}
+                >
+                  Izaberi Push komplet
+                </button>
+              )}
+            {upperCabinet(value) && value.selection.opening === "overhang" && (
+              <Field
+                label="Prepust fronta (mm)"
+                hint={`Visina fronta: ${wallFrontHeight(value, value.selection, settings.gap)} mm`}
+              >
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  max="100"
+                  required
+                  value={value.selection.frontOverhang ?? 20}
+                  onChange={(e) =>
+                    setValue({
+                      ...value,
+                      ownOpening: true,
+                      selection: {
+                        ...value.selection,
+                        frontOverhang: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </Field>
+            )}
+            {value.selection.opening === "push" &&
+              select("push", "push", "Push mehanizam")}
+            </div>
           </div>
-          {t.unsupported && <p className="layout-warning">Precizan obračun nije dostupan za ovaj tip. Dimenzije i raspored možete sačuvati.</p>}
-          {actions}
+          {description && <p className="element-description">{description}</p>}
+          <fieldset hidden disabled className="element-advanced-hidden">
           <div className="dimension-fields">
-            {numeric("width", "Širina", 80, 6000)}
-            {numeric("height", "Visina", 40, 3000)}
             {numeric("depth", "Dubina", 10, 1500)}
           </div>
           <div className="field-grid">
-            {t.drawers > 0
+            {value.kind.startsWith("reference") && t.unsupported ? null : t.drawers > 0
               ? numeric("drawers", "Broj fioka", 1, 6)
               : t.doors > 0
                 ? numeric("doors", "Broj vrata", 1, 4)
@@ -227,101 +453,6 @@ export default function ElementEditor({
             {select("edge", "edge", "Kant traka")}
             {!["worktop", "side", "panel", "plinth"].includes(value.kind) &&
               numeric("shelves", "Broj polica", 0, 12)}
-            <Field label="Otvaranje">
-              <select
-                value={value.selection.opening}
-                onChange={(e) => {
-                  if (
-                    e.target.value === "push" &&
-                    (standardWall(value) ||
-                      tallCabinet(value) ||
-                      value.kind === "lift") &&
-                    construct(
-                      value,
-                      { ...value.selection, opening: "push" },
-                      settings,
-                      products,
-                    ).errors.length
-                  ) {
-                    setPushDialog(true);
-                    return;
-                  }
-                  setValue({
-                    ...value,
-                    locked: true,
-                    selection: {
-                      ...value.selection,
-                      opening: e.target.value as Selection["opening"],
-                    },
-                  });
-                }}
-              >
-                <option value="handles">Klasične ručke</option>
-                {!standardWall(value) && value.kind !== "lift" && (
-                  <option value="gola">
-                    {tallCabinet(value) ? "Vertikalna GOLA" : "GOLA profili"}
-                  </option>
-                )}
-                <option value="push">Push-to-open</option>
-                {standardWall(value) && (
-                  <option value="overhang">Prepušteni frontovi</option>
-                )}
-              </select>
-            </Field>
-            {tallCabinet(value) && value.selection.opening === "gola" && (
-              <VerticalGolaSelect
-                value={value.selection.verticalGola}
-                products={products}
-                onChange={(verticalGola, prices) => {
-                  setProducts(prices);
-                  setValue({
-                    ...value,
-                    locked: true,
-                    selection: { ...value.selection, verticalGola },
-                  });
-                }}
-              />
-            )}
-            {value.selection.opening === "push" &&
-              (standardWall(value) ||
-                tallCabinet(value) ||
-                value.kind === "lift") && (
-                <button
-                  type="button"
-                  className="btn secondary"
-                  onClick={() => setPushDialog(true)}
-                >
-                  Izaberi Push komplet
-                </button>
-              )}
-            {standardWall(value) && value.selection.opening === "overhang" && (
-              <Field
-                label="Prepust fronta (mm)"
-                hint={`Visina fronta: ${wallFrontHeight(value, value.selection, settings.gap)} mm`}
-              >
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  max="100"
-                  required
-                  value={value.selection.frontOverhang ?? 20}
-                  onChange={(e) =>
-                    setValue({
-                      ...value,
-                      locked: true,
-                      selection: {
-                        ...value.selection,
-                        frontOverhang: Number(e.target.value),
-                      },
-                    })
-                  }
-                />
-              </Field>
-            )}
-            {standardWall(value) &&
-              value.selection.opening === "push" &&
-              select("push", "push", "Push mehanizam")}
             {select("handle", "handle", "Ručke")}
             {numeric("extra", "Dodatni rad (RSD)", 0, 1000000)}
             <Field label="Napomena">
@@ -338,23 +469,6 @@ export default function ElementEditor({
           </details>
           <details className="disclosure visual-element-settings">
             <summary>Izgled u 2D prikazu</summary>
-            <Field label="Smer otvaranja vrata">
-              <select
-                value={value.visual?.hinge || "left"}
-                onChange={(e) =>
-                  setValue({
-                    ...value,
-                    visual: {
-                      ...value.visual,
-                      hinge: e.target.value as "left" | "right",
-                    },
-                  })
-                }
-              >
-                <option value="left">Levo</option>
-                <option value="right">Desno</option>
-              </select>
-            </Field>
             <label className="check-field">
               <input
                 type="checkbox"
@@ -405,7 +519,8 @@ export default function ElementEditor({
               />
               Ploča za kuvanje iznad elementa
             </label>
-            {["worktop", "plinth", "side", "panel"].includes(value.kind) && (
+            {(["worktop", "plinth", "side", "panel"].includes(value.kind) ||
+              isBridge(value)) && (
               <Field
                 label="Položaj od početka zida (mm)"
                 hint="Prazno: automatski položaj dodatka."
@@ -458,6 +573,7 @@ export default function ElementEditor({
               />
             </Field>
           </details>
+          </fieldset>
           {errors.length > 0 && (
             <div className="error-note" role="alert">
               {errors.map((x) => (
@@ -467,7 +583,7 @@ export default function ElementEditor({
           )}
           <div className="editor-save">
             <button className="btn primary full" type="submit">
-              Sačuvaj
+              {isNew ? "Dodaj" : "Sačuvaj"}
             </button>
           </div>
         </form>
@@ -483,7 +599,7 @@ export default function ElementEditor({
             setProducts(prices);
             setValue({
               ...value,
-              locked: true,
+              ownOpening: true,
               selection: pushSelection(value.selection, kit),
             });
             setErrors([]);

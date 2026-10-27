@@ -9,6 +9,7 @@ import type {
   VerticalGolaRule,
 } from "./types";
 import { selectionMaterials } from "./appearance";
+import referenceCatalog from "./reference-catalog";
 export const productSelectionKeys: SelectionProductKey[] = [
   "body",
   "front",
@@ -25,21 +26,78 @@ export const productSelectionKeys: SelectionProductKey[] = [
   "push",
 ];
 export const standardWall = (e: KitchenElement) =>
-  ["wall1", "wall2", "wall1Right", "wallGlass1", "wallGlass2", "wallBridgeFridge", "wallBridgeOven"].includes(e.kind);
+  [
+    "wall1",
+    "wall2",
+    "wall1Right",
+    "wallGlass1",
+    "wallGlass2",
+    "wallBridgeFridge",
+    "wallBridgeOven",
+    "reference029",
+  ].includes(e.kind);
+/** Upper cabinets open with handles, push or an overhanging front. */
+export const upperCabinet = (e: KitchenElement) =>
+  standardWall(e) ||
+  [
+    "lift",
+    "liftDouble",
+    "liftFolding",
+    "open",
+    "wallHood",
+    "wallCorner",
+  ].includes(e.kind) ||
+  (e.kind.startsWith("reference") &&
+    ["Gornji", "Most"].includes(
+      referenceCatalog.find((item) => item.kind === e.kind)?.group ?? "",
+    ));
 export const tallCabinet = (e: KitchenElement) =>
-  ["tall", "fridge", "tallOven", "tallOne", "tallDrawer", "tallFreezer", "tallOvenMicrowave", "tallCargo", "tallPantry", "tallCombined"].includes(e.kind);
+  [
+    "tall",
+    "fridge",
+    "tallOven",
+    "tallOne",
+    "tallDrawer",
+    "tallFreezer",
+    "tallOvenMicrowave",
+    "tallCargo",
+    "tallPantry",
+    "tallCombined",
+    "reference062",
+    "reference065",
+  ].includes(e.kind);
 export const horizontalGolaKinds: KitchenElement["kind"][] = [
   "base1",
+  "reference001",
   "base1Right",
   "base2",
   "drawer2",
   "drawer3",
   "drawer4",
+  "reference004",
+  "reference007",
+  "reference008",
   "sink",
   "sinkOne",
 ];
 function openingSelection(e: KitchenElement, global: Selection): Selection {
   if (e.locked) return { ...e.selection };
+  const base = rowSelection(e, global);
+  // An element's own opening overrides only the opening; materials keep following the project.
+  return e.ownOpening
+    ? {
+        ...base,
+        opening: e.selection.opening,
+        frontOverhang: e.selection.frontOverhang,
+        verticalGola: e.selection.verticalGola,
+        push: e.selection.push,
+      }
+    : base;
+}
+function rowSelection(e: KitchenElement, global: Selection): Selection {
+  const referenceGroup = e.kind.startsWith("reference")
+    ? referenceCatalog.find((item) => item.kind === e.kind)?.group
+    : undefined;
   if (standardWall(e))
     return {
       ...global,
@@ -51,14 +109,22 @@ function openingSelection(e: KitchenElement, global: Selection): Selection {
   if (e.kind === "lift")
     return {
       ...global,
-      opening:
-        global.wallOpening === "push" && global.wallLift ? "push" : "handles",
+      opening: global.wallOpening ?? "handles",
       push: global.wallPush ?? global.push,
       lift: global.wallLift ?? global.lift,
       handle: global.wallHandle ?? global.handle,
     };
-  if (e.kind === "open") return { ...global, opening: "handles" };
-  if (tallCabinet(e))
+  if (e.kind === "open" || e.kind === "reference032")
+    return { ...global, opening: "handles" };
+  if (referenceGroup === "Gornji" || referenceGroup === "Most" || upperCabinet(e))
+    return {
+      ...global,
+      opening: global.wallOpening ?? "handles",
+      hinge: global.wallHinge ?? global.hinge,
+      push: global.wallPush ?? global.push,
+      handle: global.wallHandle ?? global.handle,
+    };
+  if (tallCabinet(e) || referenceGroup === "Visoki")
     return {
       ...global,
       opening: global.tallOpening ?? global.opening,
@@ -74,7 +140,7 @@ export function effectiveSelection(
   return selectionMaterials(openingSelection(e, global));
 }
 export const frontOverhang = (e: KitchenElement, s: Selection) =>
-  standardWall(e) && s.opening === "overhang" ? (s.frontOverhang ?? 20) : 0;
+  upperCabinet(e) && s.opening === "overhang" ? (s.frontOverhang ?? 20) : 0;
 export const wallFrontHeight = (
   e: KitchenElement,
   s: Selection,

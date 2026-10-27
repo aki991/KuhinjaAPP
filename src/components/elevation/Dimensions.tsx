@@ -31,12 +31,14 @@ export function WidthDimension({
   width,
   value,
   selected = false,
+  textRotation = 0,
 }: {
   x: number;
   y: number;
   width: number;
   value: number;
   selected?: boolean;
+  textRotation?: number;
 }) {
   return (
     <g
@@ -47,7 +49,16 @@ export function WidthDimension({
         d={`M${x} ${y - 5}v10M${x + width} ${y - 5}v10M${x} ${y}h${width}`}
       />
       <path d={`M${x - 3} ${y + 3}l6 -6M${x + width - 3} ${y + 3}l6 -6`} />
-      <text x={x + width / 2} y={y - 7} textAnchor="middle">
+      <text
+        x={x + width / 2}
+        y={y - 7}
+        textAnchor="middle"
+        transform={
+          textRotation
+            ? `rotate(${textRotation} ${x + width / 2} ${y - 7})`
+            : undefined
+        }
+      >
         {number(value)}
       </text>
     </g>

@@ -17,7 +17,7 @@ import {
 import { categories, findProduct, templates, uid } from "../core/catalog";
 import { calculateOffer, repriceOffer, rsd } from "../core/engine";
 import { displayProject, ensureLayout, elementCodes } from "../core/layout";
-import { effectiveSelection, standardWall, tallCabinet } from "../core/opening";
+import { effectiveSelection, upperCabinet, tallCabinet } from "../core/opening";
 import { construct } from "../core/construction";
 import { pushSelection } from "../core/opening-kits";
 import { exportPDF } from "../core/files";
@@ -82,7 +82,7 @@ export default function OfferView({
     [repair, setRepair] = useState<string | null>(null);
   const groupElements = (group: "wall" | "tall") =>
     offer.elements.filter(
-      (e) => !e.locked && (group === "wall" ? standardWall(e) : tallCabinet(e)),
+      (e) => !e.locked && (group === "wall" ? upperCabinet(e) : tallCabinet(e)),
     );
   const choosePush = (group: "wall" | "tall") => {
     const relevant = groupElements(group);
@@ -304,7 +304,7 @@ export default function OfferView({
                       "push"
                     )
                       setPushTarget(
-                        !r.element.locked && standardWall(r.element)
+                        !r.element.locked && upperCabinet(r.element)
                           ? "wall"
                           : !r.element.locked && tallCabinet(r.element)
                             ? "tall"
@@ -338,15 +338,6 @@ export default function OfferView({
               </button>
             ))}
           </div>
-          <button
-            className="btn primary full"
-            onClick={() => {
-              setBaseline({ total: c.total, cost: c.cost });
-              setScreen("optimize");
-            }}
-          >
-            <SlidersHorizontal size={22} /> Promeni materijale i okove
-          </button>
           <div className="quote-primary-actions">
             <button
               className="btn secondary full"
@@ -404,208 +395,9 @@ export default function OfferView({
           </p>
         </>
       )}
-      {screen === "optimize" && (
-        <>
-          <div className="compact-options">
-            <fieldset>
-              <legend>Klizači</legend>
-              <div className="choice-buttons">
-                {(["economy", "standard", "premium"] as Tier[]).map(
-                  (tier, i) => (
-                    <button
-                      key={tier}
-                      aria-pressed={
-                        product(offer.selection.slide)?.tier === tier
-                      }
-                      onClick={() => selectModel("slide", "slide", tier)}
-                    >
-                      {["Ekonomični", "Standard", "Premium"][i]}
-                    </button>
-                  ),
-                )}
-              </div>
-            </fieldset>
-            <fieldset>
-              <legend>Frontovi</legend>
-              {offer.selection.frontMode === "body" && (
-                <small className="opening-compatible-note">
-                  Isto kao korpus
-                </small>
-              )}
-              <div className="choice-buttons">
-                {["univer", "mdf", "lacquer"].map((kind, i) => (
-                  <button
-                    key={kind}
-                    aria-pressed={
-                      offer.selection.frontMode !== "body" &&
-                      product(offer.selection.front)?.kind === kind
-                    }
-                    onClick={() =>
-                      selectModel("front", "front", undefined, kind)
-                    }
-                  >
-                    {["Univer", "MDF", "Lakirani MDF"][i]}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <fieldset>
-              <legend>Šarke</legend>
-              <div className="choice-buttons">
-                {(["economy", "standard", "premium"] as Tier[]).map(
-                  (tier, i) => (
-                    <button
-                      key={tier}
-                      aria-pressed={
-                        product(offer.selection.hinge)?.tier === tier
-                      }
-                      onClick={() => selectModel("hinge", "hinge", tier)}
-                    >
-                      {["Osnovne", "Usporivači", "Premium"][i]}
-                    </button>
-                  ),
-                )}
-              </div>
-            </fieldset>
-            <OpeningChoices
-              label="Otvaranje donjih"
-              value={offer.selection.opening}
-              options={["handles", "gola", "push"]}
-              onChange={(opening) =>
-                change({
-                  selection: {
-                    ...offer.selection,
-                    opening,
-                    wallOpening: offer.selection.wallOpening ?? "handles",
-                    tallOpening:
-                      offer.selection.tallOpening ??
-                      (offer.selection.opening === "overhang"
-                        ? "handles"
-                        : offer.selection.opening),
-                  },
-                })
-              }
-            />
-            {
-              <>
-                <OpeningChoices
-                  label="Otvaranje visećih"
-                  value={offer.selection.wallOpening ?? "handles"}
-                  options={["handles", "push", "overhang"]}
-                  onChange={(wallOpening) =>
-                    wallOpening === "push"
-                      ? choosePush("wall")
-                      : change({
-                          selection: {
-                            ...offer.selection,
-                            wallOpening: wallOpening as
-                              "handles" | "push" | "overhang",
-                          },
-                        })
-                  }
-                  extension={offer.selection.frontOverhang ?? 20}
-                  onExtension={(frontOverhang) =>
-                    change({ selection: { ...offer.selection, frontOverhang } })
-                  }
-                />
-                {offer.selection.wallOpening === "push" && (
-                  <Field label="Šarke visećih">
-                    <select
-                      value={offer.selection.wallHinge ?? offer.selection.hinge}
-                      onChange={(e) =>
-                        change({
-                          selection: {
-                            ...offer.selection,
-                            wallHinge: e.target.value,
-                          },
-                        })
-                      }
-                    >
-                      {offer.prices
-                        .filter(
-                          (p) =>
-                            p.category === "hinge" &&
-                            (p.active ||
-                              p.id ===
-                                (offer.selection.wallHinge ??
-                                  offer.selection.hinge)),
-                        )
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} · {p.supplier}
-                          </option>
-                        ))}
-                    </select>
-                  </Field>
-                )}
-                {offer.selection.wallOpening === "push" && (
-                  <button
-                    type="button"
-                    className="text-btn"
-                    onClick={() => setPushTarget("wall")}
-                  >
-                    Push komplet visećih
-                  </button>
-                )}
-                {offer.selection.wallOpening !== "handles" &&
-                  !offer.selection.wallLift &&
-                  offer.elements.some(
-                    (e) => e.kind === "lift" && !e.locked,
-                  ) && (
-                    <small className="opening-compatible-note">
-                      Podizni elementi zadržavaju ručke.
-                    </small>
-                  )}
-              </>
-            }
-            {
-              <OpeningChoices
-                label="Otvaranje visokih"
-                value={offer.selection.tallOpening ?? offer.selection.opening}
-                vertical
-                options={["handles", "gola", "push"]}
-                onChange={(tallOpening) =>
-                  tallOpening === "push"
-                    ? choosePush("tall")
-                    : change({
-                        selection: {
-                          ...offer.selection,
-                          tallOpening: tallOpening as
-                            "handles" | "push" | "gola",
-                        },
-                      })
-                }
-              />
-            }
-            {offer.selection.tallOpening === "gola" && (
-              <VerticalGolaSelect
-                value={offer.selection.verticalGola}
-                products={offer.prices}
-                onChange={(verticalGola, prices) =>
-                  change({
-                    prices,
-                    selection: { ...offer.selection, verticalGola },
-                  })
-                }
-              />
-            )}
-            {offer.selection.tallOpening === "push" && (
-              <button
-                type="button"
-                className="text-btn"
-                onClick={() => setPushTarget("tall")}
-              >
-                Push komplet visokih
-              </button>
-            )}
-          </div>
-          {offer.elements.some((e) => e.locked) && (
-            <p className="individual-note">
-              <LockKeyhole size={17} />
-              {offer.elements.filter((e) => e.locked).length} elemenata zadržava
-              svoj izbor.
-            </p>
-          )}
+      {screen === "summary" && (
+        <details className="disclosure">
+          <summary>Varijante</summary>
           {previous && (
             <button
               className="btn secondary full"
@@ -617,20 +409,6 @@ export default function OfferView({
               <RotateCcw size={19} /> Vrati prethodnu varijantu
             </button>
           )}
-          <details className="disclosure">
-            <summary>Modeli i dobavljači</summary>
-            {models("front", "front")}
-            {models("slide", "slide")}
-            {models("hinge", "hinge")}
-            {models("body", "body")}
-            {models("worktop", "worktop")}
-            {models("lift", "lift")}
-            {models("handle", "handle")}
-            {models("gola", "gola")}
-            {models("golaEnd", "golaEnd")}
-            {models("push", "push")}
-            {models("leg", "leg")}
-          </details>
           <div className="variant-actions">
             <button
               className="btn secondary full"
@@ -701,7 +479,7 @@ export default function OfferView({
               ))}
             </details>
           )}
-        </>
+        </details>
       )}
       {screen === "customer" && (
         <div className="customer-offer">
@@ -798,6 +576,7 @@ export default function OfferView({
       )}
       {repairElement && (
         <ElementEditor
+          offer={offer}
           element={repairElement}
           products={offer.prices}
           global={offer.selection}

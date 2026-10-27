@@ -1,15 +1,17 @@
 import { useState, type ReactNode } from "react";
-import { Ruler } from "lucide-react";
-import type { KitchenLayout, LayoutSpacer } from "../core/types";
+import type { KitchenLayout, LayoutSpacer, Offer } from "../core/types";
 import { Field, Modal } from "./UI";
+import LibraryThumbnail from "./elevation/LibraryThumbnail";
 export default function SpacerEditor({
   spacer,
+  offer,
   layout,
   onClose,
   onSave,
   actions,
 }: {
   spacer: LayoutSpacer;
+  offer: Offer;
   layout: KitchenLayout;
   onClose: () => void;
   onSave: (s: LayoutSpacer) => void;
@@ -25,10 +27,10 @@ export default function SpacerEditor({
           onClose();
         }}
       >
-        <div className="editor-drawing">
-          <Ruler size={65} />
-        </div>
-        {actions}
+        <div className="compact-element-editor">
+          <div className="editor-drawing"><LibraryThumbnail element={value} offer={offer} /></div>
+          <div className="compact-element-controls">
+            {actions}
         <Field label="Širina razmaka (mm)">
           <input
             className="large-number"
@@ -43,6 +45,9 @@ export default function SpacerEditor({
             }
           />
         </Field>
+          </div>
+        </div>
+        <fieldset hidden disabled className="element-advanced-hidden">
         <Field label="Red">
           <select
             value={value.placement.row || "base"}
@@ -85,6 +90,7 @@ export default function SpacerEditor({
             </select>
           </Field>
         </details>
+        </fieldset>
         <button className="btn primary full">Sačuvaj</button>
       </form>
     </Modal>

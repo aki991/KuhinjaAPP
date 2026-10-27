@@ -153,16 +153,40 @@ export type ElementKind =
   | "plinth"
   | "panel"
   | "island"
+  | `reference${number}`
   | LibraryKind;
 export type LibraryKind =
-  | "base1Right" | "drawer2Door" | "drawer3Door" | "sinkOne"
-  | "dishwasherBuilt" | "cornerBlind" | "baseOpen" | "baseCargo"
-  | "wall1Right" | "liftDouble" | "liftFolding" | "wallGlass1"
-  | "wallGlass2" | "wallHood" | "wallCorner" | "wallBridgeFridge"
-  | "wallBridgeOven" | "tallOne" | "tallDrawer" | "tallFreezer"
-  | "tallOvenMicrowave" | "tallCargo" | "tallPantry" | "tallCombined"
-  | "islandDrawer" | "islandBack" | "bar" | "filler"
-  | "freeFridge" | "freeStove" | "freeDishwasher";
+  | "base1Right"
+  | "drawer2Door"
+  | "drawer3Door"
+  | "sinkOne"
+  | "dishwasherBuilt"
+  | "cornerBlind"
+  | "baseOpen"
+  | "baseCargo"
+  | "wall1Right"
+  | "liftDouble"
+  | "liftFolding"
+  | "wallGlass1"
+  | "wallGlass2"
+  | "wallHood"
+  | "wallCorner"
+  | "wallBridgeFridge"
+  | "wallBridgeOven"
+  | "tallOne"
+  | "tallDrawer"
+  | "tallFreezer"
+  | "tallOvenMicrowave"
+  | "tallCargo"
+  | "tallPantry"
+  | "tallCombined"
+  | "islandDrawer"
+  | "islandBack"
+  | "bar"
+  | "filler"
+  | "freeFridge"
+  | "freeStove"
+  | "freeDishwasher";
 export type LayoutRow = "base" | "wall" | "tall" | "extra";
 export type LayoutLane = "base" | "wall" | "extra";
 export interface Placement {
@@ -188,6 +212,7 @@ export interface KitchenWall {
 export interface KitchenLayout {
   walls: KitchenWall[];
   activeWall: string;
+  islandPosition?: { x: number; y: number };
   version?: 3;
   spacers?: LayoutSpacer[];
   migrationNotes?: string[];
@@ -208,6 +233,10 @@ export interface KitchenElement {
   note: string;
   placement?: Placement;
   visual?: ElementVisual;
+  /** The element keeps its own opening system; its materials still follow the project. */
+  ownOpening?: boolean;
+  /** Worktop created together with a base cabinet: follows it and is deleted with it. */
+  autoTopFor?: string;
 }
 export type VisualAppliance =
   "auto" | "none" | "oven" | "sink" | "hob" | "fridge" | "dishwasher";

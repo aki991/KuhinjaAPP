@@ -251,3 +251,25 @@
 .visual-element-settings .check-field {
   margin: 12px 0;
 }
+
+.elevation-object-hits {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.elevation-hit.object-hit {
+  cursor: pointer;
+}
+/* Delete controls are always red so they stand out. */
+button[aria-label^="Obriši"],
+.editor-delete,
+.delete-btn {
+  color: #c62828 !important;
+  background: #fdeceb !important;
+  border-color: #e39a95 !important;
+}
+.btn.danger {
+  color: #fff !important;
+  background: #c62828 !important;
+  border-color: #c62828 !important;
+}

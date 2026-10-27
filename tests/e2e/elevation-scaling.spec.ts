@@ -1,3 +1,4 @@
+import { pinchZoom } from "./pinch";
 import { test, expect, type Page } from "@playwright/test";
 import { createOffer } from "../../src/core/db";
 import { newElement } from "../../src/core/catalog";
@@ -213,7 +214,7 @@ test("visina prostorije, prozori i visoki elementi ne umanjuju kuhinju; Uklopi n
       "aria-label",
       `Visina prostorije ${height} mm`,
     );
-    await page.getByRole("button", { name: "Uvećaj 2D prikaz" }).click();
+    await pinchZoom(page);
     await page
       .locator(".elevation-scroll")
       .evaluate((e) => e.scrollTo({ left: 300, top: 0 }));

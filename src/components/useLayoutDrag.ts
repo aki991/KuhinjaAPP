@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { LayoutLane, Offer } from "../core/types";
-import { allLayoutItems, canPlace, orderedLane, span } from "../core/layout";
+import {
+  allLayoutItems,
+  canPlace,
+  orderedLane,
+  span,
+  relocateItem,
+  wallUsage,
+} from "../core/layout";
 export interface DropTarget {
   wall: string;
   row: LayoutLane;
@@ -118,9 +125,31 @@ export default function useLayoutDrag({
             ? (list[list.length - 1].placement?.offset || 0) +
               span(list[list.length - 1])
             : 0;
-      const length = list.reduce((a, e) => a + span(e), 0) + span(source),
+      const moved = relocateItem(
+          offer.elements,
+          offer.layout!,
+          source.id,
+          wall,
+          lane,
+          index,
+        ),
         wallLength =
-          offer.layout!.walls.find((w) => w.id === wall)?.length || 0;
+          offer.layout!.walls.find((w) => w.id === wall)?.length || 0,
+        usage =
+          moved &&
+          wallUsage(
+            moved.elements,
+            moved.layout.walls.find((w) => w.id === wall)!,
+            moved.layout,
+          ),
+        length = usage
+          ? Math.max(usage.base, usage.upper)
+          : list.reduce((a, e) => a + span(e), 0) + span(source);
+      if (moved)
+        offset =
+          allLayoutItems(moved.elements, moved.layout).find(
+            (e) => e.id === source.id,
+          )?.placement?.offset ?? offset;
       return {
         wall,
         row: lane,

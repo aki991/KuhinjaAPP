@@ -16,6 +16,31 @@
   flex: none;
   margin-left: auto;
 }
+.room-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 2px 0 6px;
+}
+.room-controls .text-btn {
+  min-height: 44px;
+  text-align: left;
+}
+.wall-measure .wall-length strong {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+  white-space: normal;
+}
+.wall-measure > .wall-free-space {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+.wall-free-space > span {
+  line-height: 1.35;
+}
 .kitchen-view-modes button {
   min-height: 48px;
   padding: 8px 12px;
@@ -38,6 +63,14 @@
 .top-canvas {
   display: block;
   overflow: hidden;
+}
+.plan-wall-label[role="button"] {
+  cursor: pointer;
+  outline: none;
+}
+.plan-wall-label:focus-visible rect {
+  stroke: #98622f;
+  stroke-width: 2;
 }
 .top-canvas [role="button"] {
   cursor: pointer;
@@ -265,6 +298,9 @@
 .technical-element .technical-handle {
   stroke: var(--handle-color, #55584d);
 }
+.technical-element .reference-front { fill: var(--front-fill, #f3e5c8); }
+.technical-element .reference-body { fill: var(--body-fill, #e8dfcc); }
+.technical-element .reference-handle { fill: var(--handle-color, #526269); }
 @media (min-width: 761px) {
   .appearance-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -279,4 +315,35 @@
 .kitchen-inline-library .library-grid > button { min-height: 122px; padding: 10px 8px; gap: 6px; }
 .kitchen-inline-library .library-grid strong { font-size: 14px; line-height: 1.25; }
 .kitchen-inline-library .library-grid small { font-size: 12px; line-height: 1.2; }
+.library-filter { display: flex; gap: 5px; margin-bottom: 12px; }
+.library-filter button { flex: 1; min-width: 0; min-height: 44px; padding: 5px 2px; border: 1px solid #ddc5a4; border-radius: 8px; background: #fff8ed; color: #704b2c; font-size: 14px; }
+.library-filter button[aria-pressed="true"] { color: #fff5e5; border-color: #9b6c3e; background: linear-gradient(#542a1166, #542a1166), var(--wood-dark) center / cover; }
+.library-thumbnail { display: block; width: 100px; height: 84px; max-width: 100%; }
+.compact-element-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.compact-element-editor .editor-drawing { margin: 0; min-width: 0; min-height: 180px; padding: 12px; display: flex; align-items: center; justify-content: center; }
+.compact-element-editor .library-thumbnail { width: 100%; height: auto; max-height: 210px; }
+.compact-element-controls { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.compact-element-controls .field { margin: 0; }
+.compact-element-controls .field > span { font-size: 12px; }
+.compact-element-controls .field input, .compact-element-controls .field select { width: 100%; min-width: 0; min-height: 44px; padding: 8px; }
+.compact-element-controls .element-editor-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin: 0; }
+.compact-element-controls .element-editor-actions button { min-width: 0; min-height: 44px; padding: 5px 3px; justify-content: center; gap: 3px; font-size: 12px; }
+.compact-element-controls .element-editor-actions button[hidden] { display: none !important; }
+.compact-element-controls .editor-delete { order: -1; }
 .kitchen-fullscreen .kitchen-inline-library { display: none; }
+.element-description { margin: 10px 2px 4px; font-size: 14px; line-height: 1.4; color: #5b3d25; }
+
+/* Izgled: "Vaša kombinacija" */
+.combo-card { margin: 16px 0; padding: 6px 4px; border: 1px solid #e3cfb2; border-radius: 12px; background: #fffaf1; box-shadow: 0 2px 8px #6b43211a; }
+.combo-card > h2 { margin: 0; padding: 14px 16px 10px; font-size: 20px; color: #352013; }
+.combo-row { width: 100%; display: flex; align-items: center; gap: 14px; min-height: 76px; padding: 10px 14px; border: 0; border-top: 1px solid #ecdcc3; border-radius: 0; background: transparent; color: #4a2f1b; text-align: left; cursor: pointer; }
+.combo-row:hover { background: #f8ecd9; }
+.combo-swatch { position: relative; flex: none; width: 56px; height: 56px; border: 1px solid #dcc6a5; border-radius: 8px; overflow: hidden; }
+.combo-swatch img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.combo-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.combo-text small { font-size: 14px; color: #7a5a3d; }
+.combo-text strong { font-size: 17px; line-height: 1.25; color: #2d1a0d; overflow-wrap: anywhere; }
+.combo-details { padding: 0 16px 16px; }
+.combo-details > h2 { padding-left: 0; }
+.appearance-subtitle { margin: 14px 2px 6px; font-size: 17px; color: #352013; }
+.combo-text small.combo-used { color: #3d6b3a; font-weight: 600; }

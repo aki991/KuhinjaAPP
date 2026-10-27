@@ -1,16 +1,20 @@
 import {
   elementCodes,
+  isBridge,
   isSpacer,
   laneOf,
   rowOf,
   packLayout,
   wallUsage,
+  junctionReservations,
+  reservedLength,
 } from "./layout";
 import type {
   ElevationConfig,
   KitchenElement,
   LayoutItem,
   LayoutLane,
+  KitchenLayout,
   Offer,
   Opening,
   VisualAppliance,
@@ -103,6 +107,46 @@ export const intersects = (a: Rect, b: Rect) =>
   a.x + a.width > b.x &&
   a.y < b.y + b.height &&
   a.y + a.height > b.y;
+/** Available horizontal space at the wall-cabinet height, including tall cabinets and junctions. */
+export function freeUpperLength(
+  scene: ElevationScene,
+  elements: KitchenElement[],
+  layout: KitchenLayout,
+) {
+  const reservations = junctionReservations(elements, layout);
+  const start = reservedLength(reservations, scene.wall, "wall", "start");
+  const end = reservedLength(reservations, scene.wall, "wall", "end");
+  const intervals: [number, number][] = [
+    [0, start],
+    [scene.length - end, scene.length],
+  ];
+  for (const entry of scene.entries) {
+    if (
+      entry.row === "wall" ||
+      (!isSpacer(entry.item) &&
+        rowOf(entry.item) === "tall" &&
+        entry.rect.y + entry.rect.height > scene.upperBottom)
+    )
+      intervals.push([entry.rect.x, entry.rect.x + entry.rect.width]);
+  }
+  let occupied = 0,
+    cursor = 0;
+  for (const [left, right] of intervals
+    .map(
+      ([a, b]) =>
+        [
+          Math.max(0, Math.min(scene.length, a)),
+          Math.max(0, Math.min(scene.length, b)),
+        ] as [number, number],
+    )
+    .sort((a, b) => a[0] - b[0])) {
+    if (right > cursor) {
+      occupied += Math.max(0, right - Math.max(cursor, left));
+      cursor = right;
+    }
+  }
+  return Math.max(0, scene.length - occupied);
+}
 export function subtractRect(source: Rect, cut: Rect): Rect[] {
   if (!intersects(source, cut)) return [source];
   const x0 = Math.max(source.x, cut.x),
@@ -143,9 +187,7 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
     warnings: string[] = [];
   const lower = items.filter(
     (e): e is KitchenElement =>
-      !isSpacer(e) &&
-      laneOf(e) === "base" &&
-      rowOf(e) !== "tall",
+      !isSpacer(e) && laneOf(e) === "base" && rowOf(e) !== "tall",
   );
   const baseTop = lower.length
       ? Math.max(
@@ -257,7 +299,8 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
       );
     }
   let topOffset = 0,
-    plinthOffset = 0;
+    plinthOffset = 0,
+    bridgeOffset = 0;
   for (const item of items
     .filter((e): e is KitchenElement => !isSpacer(e) && laneOf(e) === "extra")
     .sort((a, b) => (a.placement?.order || 0) - (b.placement?.order || 0))) {
@@ -270,7 +313,9 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
             ? topOffset
             : item.kind === "plinth"
               ? plinthOffset
-              : wallUsage(elements, wall, layout).base +
+              : isBridge(item)
+                ? bridgeOffset
+                : wallUsage(elements, wall, layout).base +
                 i * (item.kind === "side" ? item.depth : item.width);
       const beneath = entries.filter(
           (e) =>
@@ -298,6 +343,7 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
           );
       }
       if (item.kind === "plinth") plinthOffset = x + item.width;
+      if (isBridge(item)) bridgeOffset = x + item.width;
     }
   }
   const actualTop = Math.max(
@@ -310,6 +356,21 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
   for (const e of entries.filter((e) => e.row === "wall"))
     if (isSpacer(e.item) || e.item.visual?.bottom === undefined) {
       e.rect.y = upperBottom;
+      e.visible = [frontBounds(e)];
+      e.counterTop = e.rect.y + e.rect.height;
+    }
+  // Bridges stand on top of the wall-cabinet row.
+  const upperHeight = Math.max(
+    720,
+    ...entries
+      .filter((e) => e.row === "wall" && !isSpacer(e.item))
+      .map((e) => e.rect.height),
+  );
+  for (const e of entries.filter(
+    (e) => e.row === "extra" && isBridge(e.item),
+  ))
+    if (!isSpacer(e.item) && e.item.visual?.bottom === undefined) {
+      e.rect.y = upperBottom + upperHeight;
       e.visible = [frontBounds(e)];
       e.counterTop = e.rect.y + e.rect.height;
     }
@@ -326,8 +387,7 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
       : e.rect.y + e.rect.height;
   }
   const tall = entries.filter(
-    (e) =>
-      !isSpacer(e.item) && rowOf(e.item) === "tall",
+    (e) => !isSpacer(e.item) && rowOf(e.item) === "tall",
   );
   for (const e of entries.filter(
     (e) => e.row === "wall" && !isSpacer(e.item),
@@ -366,10 +426,19 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
         );
       }
   }
+  const reservations = junctionReservations(elements, layout);
   for (const e of entries) {
-    if (e.rect.x + e.rect.width > wall.length) {
+    const reservedEnd =
+      e.row === "extra"
+        ? 0
+        : reservedLength(reservations, wall.id, e.row, "end");
+    if (e.rect.x + e.rect.width > wall.length - reservedEnd) {
       e.conflict = true;
-      warnings.push(`${e.code} prelazi dužinu zida.`);
+      warnings.push(
+        reservedEnd
+          ? `${e.code} ulazi u ${reservedEnd} mm zauzetih ugaonim elementom susednog zida.`
+          : `${e.code} prelazi dužinu zida.`,
+      );
     }
     if (e.rect.y + e.rect.height > config.wallHeight) {
       e.conflict = true;
@@ -424,32 +493,32 @@ export const elevationMargins = { left: 32, right: 12, top: 40, bottom: 64 };
 
 /** Camera bounds only. Wall/obstacle coordinates and the packed layout stay intact. */
 export function kitchenBounds(scene: ElevationScene): Rect {
-  if (!scene.entries.length)
-    return {
-      x: 0,
-      y: 0,
-      width: Math.min(2000, scene.length),
-      height: scene.baseTop,
-    };
-  const left = Math.min(...scene.entries.map((e) => e.rect.x));
-  const bottom = Math.min(
-    ...scene.entries.map((e) =>
-      e.row === "base" ? 0 : e.rect.y - e.frontOverhang,
+  // The whole wall is always framed, as if both rows were filled, so windows and doors stay in view.
+  const wallTop = scene.upperBottom + 720,
+    left = Math.min(0, ...scene.entries.map((e) => e.rect.x)),
+    right = Math.max(
+      scene.length,
+      ...scene.entries.map((e) => e.rect.x + e.rect.width),
     ),
-  );
-  const right = Math.max(...scene.entries.map((e) => e.rect.x + e.rect.width));
-  const top = Math.max(
-    ...scene.entries.map((e) =>
-      Math.max(
-        e.rect.y + e.rect.height,
-        e.appliance === "sink"
-          ? e.counterTop + 280
-          : e.hob || e.appliance === "hob"
-            ? e.counterTop + 80
-            : 0,
+    bottom = Math.min(
+      0,
+      ...scene.entries.map((e) =>
+        e.row === "base" ? 0 : e.rect.y - e.frontOverhang,
       ),
     ),
-  );
+    top = Math.max(
+      wallTop,
+      ...scene.entries.map((e) =>
+        Math.max(
+          e.rect.y + e.rect.height,
+          e.appliance === "sink"
+            ? e.counterTop + 280
+            : e.hob || e.appliance === "hob"
+              ? e.counterTop + 80
+              : 0,
+        ),
+      ),
+    );
   return {
     x: left,
     y: bottom,
@@ -457,7 +526,6 @@ export function kitchenBounds(scene: ElevationScene): Rect {
     height: Math.max(1, top - bottom),
   };
 }
-
 /** Fit the kitchen, never the room. Wide runs keep readable fronts and can pan. */
 export function fitElevation(
   scene: ElevationScene,

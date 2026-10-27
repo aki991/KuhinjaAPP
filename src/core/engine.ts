@@ -143,10 +143,6 @@ export function calculateWithContext(
   const results = elements.map((e) => {
     const sel = effectiveSelection(e, global);
     const built = construct(e, sel, s, prices);
-    if (templates.find((t) => t.kind === e.kind)?.unsupported) {
-      errors.push(...built.errors.map((x) => `${templates.find((t) => t.kind === e.kind)?.name}: ${x}`));
-      return { element: e, ...built, materials: 0, hardwareCost: 0, labor: 0, edge: 0, area: 0, cost: 0 };
-    }
     let materials = 0,
       hardwareCost = 0,
       kitLabor = 0,

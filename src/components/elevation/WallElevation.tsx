@@ -1,4 +1,4 @@
-import { isSpacer } from "../../core/layout";
+import { isBridge, isSpacer } from "../../core/layout";
 import { toScreen, type ElevationScene } from "../../core/elevation";
 import ElementSVG from "./ElementSVG";
 import { HeightDimension, WidthDimension, dimensionChains } from "./Dimensions";
@@ -29,7 +29,8 @@ export default function WallElevation({
     floor = margin.top + scene.height * scale;
   const screen = (rect: Parameters<typeof toScreen>[0]) =>
     toScreen(rect, scale, scene.height, margin);
-  const chains = dimensionChains(scene, scale);
+  const chains = dimensionChains(scene, scale),
+    hasBridge = scene.entries.some((e) => isBridge(e.item));
   const dimensionFloor = scene.entries.some((e) => e.row === "base")
     ? floor
     : Math.max(
@@ -142,17 +143,20 @@ export default function WallElevation({
                 )}
               </g>
             )}
-            {(e.row !== "extra" || active) &&
+            {(e.row !== "extra" || active || isBridge(e.item)) &&
               (!isSpacer(e.item) || active || dragId === e.id) && (
                 <text
                   className={`technical-code ${active ? "selected" : ""}`}
                   x={r.x + r.width / 2}
                   y={
-                    e.row === "extra"
-                      ? r.y - 10
-                      : e.row === "wall"
-                        ? r.y - 8
-                        : floor - 3
+                    // A bridge covers the labels above the wall cabinets, so they sit inside.
+                    isBridge(e.item) || (e.row === "wall" && hasBridge)
+                      ? r.y + 20
+                      : e.row === "extra"
+                        ? r.y - 10
+                        : e.row === "wall"
+                          ? r.y - 8
+                          : floor - 3
                   }
                   textAnchor="middle"
                 >

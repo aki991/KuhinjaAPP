@@ -62,7 +62,6 @@ export default function App() {
     [toast, setToast] = useState(""),
     [settingsOpen, setSettingsOpen] = useState(false),
     [settingsTab, setSettingsTab] = useState<"general" | "prices">("general"),
-    [openMaterials, setOpenMaterials] = useState(false),
     [newOpen, setNewOpen] = useState(false),
     [newClient, setNewClient] = useState(createOffer().client),
     [newLength, setNewLength] = useState(3000),
@@ -256,11 +255,10 @@ export default function App() {
   const nav = [
     { id: "home" as Page, label: "Početna", icon: Home },
     { id: "kitchen" as Page, label: "Kuhinja", icon: Layers3 },
-    { id: "cost" as Page, label: "Cena", icon: SlidersHorizontal },
     { id: "appearance" as Page, label: "Izgled", icon: Palette },
+    { id: "cost" as Page, label: "Cena", icon: SlidersHorizontal },
   ];
   const go = (next: Page) => {
-    setOpenMaterials(false);
     if (
       (next === "kitchen" || next === "cost" || next === "appearance") &&
       !offer
@@ -405,7 +403,7 @@ export default function App() {
           )}
           {page === "cost" && offer && (
             <OfferView
-              key={offer.id + "-" + openMaterials}
+              key={offer.id}
               offer={offer}
               onChange={changeOffer}
               onSave={save}
@@ -413,7 +411,6 @@ export default function App() {
               products={products}
               suppliers={suppliers}
               notify={notify}
-              initialScreen={openMaterials ? "optimize" : "summary"}
             />
           )}
           {page === "appearance" && offer && (
@@ -422,11 +419,6 @@ export default function App() {
               offer={offer}
               products={products}
               onChange={changeOffer}
-              onOpening={() => {
-                setOpenMaterials(true);
-                setPage("cost");
-                window.scrollTo({ top: 0 });
-              }}
             />
           )}
           {page === "offers" && (

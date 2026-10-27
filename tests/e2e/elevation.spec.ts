@@ -1,3 +1,4 @@
+import { pinchZoom } from "./pinch";
 import {
   test,
   expect,
@@ -265,7 +266,7 @@ test("2D vizuelni dodaci, uređaji i staklo opstaju bez promene cene", async ({
   await expect(
     page.locator(".wall-elevation [data-appliance=hob]"),
   ).toHaveCount(1);
-  await page.getByRole("button", { name: "Otvori i mere 2D prikaza" }).click();
+  await page.getByRole("button", { name: "Okviri i mere" }).click();
   await page.getByRole("button", { name: "Prozor", exact: true }).click();
   await page.getByLabel("Od početka zida (mm)").fill("100");
   await page.getByLabel("Donja ivica od poda (mm)").fill("500");
@@ -301,10 +302,7 @@ test("2D zumiranje i dodirni pokret pomeraju crtež bez prevlačenja elementa", 
   const original = Number(
     await page.locator(".wall-elevation").getAttribute("data-scale"),
   );
-  await page.getByRole("button", { name: "Uvećaj 2D prikaz" }).click();
-  await page.getByRole("button", { name: "Uvećaj 2D prikaz" }).click();
-  await page.getByRole("button", { name: "Uvećaj 2D prikaz" }).click();
-  await page.getByRole("button", { name: "Uvećaj 2D prikaz" }).click();
+  await pinchZoom(page);
   expect(
     Number(await page.locator(".wall-elevation").getAttribute("data-scale")),
   ).toBeGreaterThan(original);

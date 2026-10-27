@@ -1,3 +1,4 @@
+import { pinchZoom } from "./pinch";
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import { createOffer } from "../../src/core/db";
 import { newElement } from "../../src/core/catalog";
@@ -211,7 +212,7 @@ test("fullscreen dodir: prevlačenje posle zumiranja i pinch-to-zoom bez slučaj
   await page.setViewportSize({ width: 844, height: 390 });
   await fixture(page);
   await enter(page);
-  await page.getByRole("button", { name: "Uvećaj 2D prikaz" }).click();
+  await pinchZoom(page, ".elevation-scroll", 1.3);
   await page.locator(".elevation-scroll").evaluate((e) => (e.scrollLeft = 30));
   const from = await point(hit(page, "D3")),
     to = await point(hit(page, "D1")),
