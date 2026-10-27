@@ -64,7 +64,7 @@ export default function App() {
     [settingsTab, setSettingsTab] = useState<"general" | "prices">("general"),
     [newOpen, setNewOpen] = useState(false),
     [newClient, setNewClient] = useState(createOffer().client),
-    [newLength, setNewLength] = useState(3000),
+    [newLengths, setNewLengths] = useState([3000, 3000, 3000]),
     [query, setQuery] = useState(""),
     [offline, setOffline] = useState(!navigator.onLine),
     [backup, setBackup] = useState<Backup | null>(null),
@@ -161,7 +161,7 @@ export default function App() {
       project: "Nova kuhinja",
       layout: "Prava kuhinja",
     });
-    setNewLength(3000);
+    setNewLengths([3000, 3000, 3000]);
     setNewOpen(true);
   }
   function makeNew() {
@@ -182,7 +182,12 @@ export default function App() {
       if (p) selected[key] = p.id;
     }
     o.selection = selected;
-    o.layout = defaultLayout(o.client.layout, newLength);
+    o.layout = defaultLayout(o.client.layout, newLengths[0]);
+    // L and U kitchens get their own measured length for every wall.
+    o.layout.walls = o.layout.walls.map((w) => {
+      const i = ["A", "B", "C"].indexOf(w.id);
+      return i > 0 ? { ...w, length: newLengths[i] } : w;
+    });
     open(o);
     setNewOpen(false);
   }
@@ -506,18 +511,6 @@ export default function App() {
                 }
               />
             </Field>
-            <Field label="Dužina zida (mm)">
-              <input
-                className="large-number"
-                type="number"
-                inputMode="numeric"
-                min="100"
-                max="30000"
-                required
-                value={newLength || ""}
-                onChange={(e) => setNewLength(Number(e.target.value))}
-              />
-            </Field>
             <Field label="Tip kuhinje">
               <select
                 value={newClient.layout}
@@ -536,6 +529,38 @@ export default function App() {
                 ))}
               </select>
             </Field>
+            {(newClient.layout.startsWith("U")
+              ? ["A", "B", "C"]
+              : newClient.layout.startsWith("L")
+                ? ["A", "B"]
+                : ["A"]
+            ).map((wall, i, walls) => (
+              <Field
+                key={wall}
+                label={
+                  walls.length > 1
+                    ? `Dužina zida ${wall} (mm)`
+                    : "Dužina zida (mm)"
+                }
+              >
+                <input
+                  className="large-number"
+                  type="number"
+                  inputMode="numeric"
+                  min="100"
+                  max="30000"
+                  required
+                  value={newLengths[i] || ""}
+                  onChange={(e) =>
+                    setNewLengths(
+                      newLengths.map((n, k) =>
+                        k === i ? Number(e.target.value) : n,
+                      ),
+                    )
+                  }
+                />
+              </Field>
+            ))}
             <details className="disclosure">
               <summary>Podaci o mušteriji</summary>
               <Field label="Ime i prezime">

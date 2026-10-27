@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowLeft,
@@ -52,6 +52,8 @@ import { elevationScene, freeUpperLength } from "../core/elevation";
 import { kitchenPlan, islandFootprint } from "../core/top-view";
 import ElevationViewport from "./elevation/ElevationViewport";
 import TopViewport from "./elevation/TopViewport";
+// three.js is loaded only when the 3D view is opened.
+const Kitchen3DViewport = lazy(() => import("./elevation/Kitchen3DViewport"));
 import WallSettingsEditor, {
   WallObjectEditor,
 } from "./elevation/WallSettingsEditor";
@@ -94,7 +96,7 @@ export default function KitchenView({
   const host = useRef<HTMLElement>(null),
     fullscreen = useKitchenFullscreen(host);
   const [focusRequest, setFocusRequest] = useState(0);
-  const [view, setView] = useState<"front" | "top">("front");
+  const [view, setView] = useState<"front" | "top" | "3d">("front");
   useEffect(() => {
     if (!fullscreen.active) setEditor(null);
   }, [fullscreen.active]);
@@ -223,9 +225,7 @@ export default function KitchenView({
         layout: {
           ...result.layout,
           activeWall:
-            item.placement!.wall === "island"
-              ? wall.id
-              : item.placement!.wall,
+            item.placement!.wall === "island" ? wall.id : item.placement!.wall,
         },
       });
     setSelected(item.id);
@@ -461,7 +461,7 @@ export default function KitchenView({
               <Save size={22} />
             </button>
           </div>
-<div className="wall-tabs" aria-label="Zidovi">
+          <div className="wall-tabs" aria-label="Zidovi">
             {roomWalls.map((w) => (
               <button
                 key={w.id}
@@ -487,13 +487,19 @@ export default function KitchenView({
               role="group"
               aria-label="Pogled kuhinje"
             >
-              <button
-                onClick={() =>
-                  setView((v) => (v === "front" ? "top" : "front"))
-                }
-              >
-                {view === "front" ? "Odozgo" : "Spreda"}
-              </button>
+              {(
+                [
+                  ["front", "Spreda"],
+                  ["top", "Odozgo"],
+                  ["3d", "3D"],
+                ] as const
+              )
+                .filter(([v]) => v !== view)
+                .map(([v, label]) => (
+                  <button key={v} onClick={() => setView(v)}>
+                    {label}
+                  </button>
+                ))}
             </div>
           </div>
           <div
@@ -532,7 +538,21 @@ export default function KitchenView({
               {dragNotice}
             </div>
           )}
-          {view === "top" ? (
+          {view === "3d" ? (
+            <Suspense
+              fallback={
+                <p className="kitchen-3d-hint">Učitavanje 3D prikaza…</p>
+              }
+            >
+              <Kitchen3DViewport
+                offer={offer}
+                fullscreen={fullscreen.active}
+                onFullscreen={() => void fullscreen.enter()}
+                onCloseFullscreen={() => void fullscreen.exit()}
+                onSelect={(item) => selectItem(item)}
+              />
+            </Suspense>
+          ) : view === "top" ? (
             <TopViewport
               offer={offer}
               scene={scene}
@@ -598,16 +618,18 @@ export default function KitchenView({
                 role="group"
                 aria-label="Tip elementa u biblioteci"
               >
-                {["Donji", "Viseći", "Visoki", "Most", "Ostali"].map((category) => (
-                  <button
-                    key={category}
-                    type="button"
-                    aria-pressed={inlineGroup === category}
-                    onClick={() => setInlineGroup(category)}
-                  >
-                    {category}
-                  </button>
-                ))}
+                {["Donji", "Viseći", "Visoki", "Most", "Ostali"].map(
+                  (category) => (
+                    <button
+                      key={category}
+                      type="button"
+                      aria-pressed={inlineGroup === category}
+                      onClick={() => setInlineGroup(category)}
+                    >
+                      {category}
+                    </button>
+                  ),
+                )}
               </div>
               <div>
                 <div className="library-grid">
@@ -682,26 +704,26 @@ export default function KitchenView({
               {group !== "Visoki" &&
                 group !== "Ostrvski" &&
                 group !== "Most" && (
-                <button
-                  onClick={() => {
-                    const spacer = newSpacer(
-                      wall.id,
-                      group === "Viseći" ? "wall" : "base",
-                    );
-                    spacer.placement = appendPlacement(
-                      offer.elements,
-                      spacer,
-                      wall.id,
-                      layout,
-                    );
-                    setEditor(spacer);
-                    setLibrary(false);
-                  }}
-                >
-                  <LibraryThumbnail offer={offer} />
-                  <strong>Razmak</strong>
-                </button>
-              )}
+                  <button
+                    onClick={() => {
+                      const spacer = newSpacer(
+                        wall.id,
+                        group === "Viseći" ? "wall" : "base",
+                      );
+                      spacer.placement = appendPlacement(
+                        offer.elements,
+                        spacer,
+                        wall.id,
+                        layout,
+                      );
+                      setEditor(spacer);
+                      setLibrary(false);
+                    }}
+                  >
+                    <LibraryThumbnail offer={offer} />
+                    <strong>Razmak</strong>
+                  </button>
+                )}
             </div>
           </Modal>
         )}
@@ -750,11 +772,15 @@ export default function KitchenView({
             onClose={() => setVisualSettings(false)}
             onSave={(elevation, length, shape) => {
               const space =
-                shape !== offer.client.layout ? spaceChange(offer, shape) : null,
+                  shape !== offer.client.layout
+                    ? spaceChange(offer, shape)
+                    : null,
                 next = space?.offer ?? offer,
                 gone = new Set(
                   layout.walls
-                    .filter((w) => !next.layout!.walls.some((x) => x.id === w.id))
+                    .filter(
+                      (w) => !next.layout!.walls.some((x) => x.id === w.id),
+                    )
                     .map((w) => w.id),
                 );
               change({
@@ -776,35 +802,34 @@ export default function KitchenView({
             }}
           />
         )}
-        {objectEditId &&
-          scene.objects.find((o) => o.id === objectEditId) && (
-            <WallObjectEditor
-              object={scene.objects.find((o) => o.id === objectEditId)!}
-              wallLength={wall.length}
-              wallHeight={scene.config.wallHeight}
-              onClose={() => setObjectEditId(null)}
-              onSave={(next) =>
-                change({
-                  elevation: {
-                    ...scene.config,
-                    objects: scene.config.objects.map((o) =>
-                      o.id === next.id ? next : o,
-                    ),
-                  },
-                })
-              }
-              onDelete={() =>
-                change({
-                  elevation: {
-                    ...scene.config,
-                    objects: scene.config.objects.filter(
-                      (o) => o.id !== objectEditId,
-                    ),
-                  },
-                })
-              }
-            />
-          )}
+        {objectEditId && scene.objects.find((o) => o.id === objectEditId) && (
+          <WallObjectEditor
+            object={scene.objects.find((o) => o.id === objectEditId)!}
+            wallLength={wall.length}
+            wallHeight={scene.config.wallHeight}
+            onClose={() => setObjectEditId(null)}
+            onSave={(next) =>
+              change({
+                elevation: {
+                  ...scene.config,
+                  objects: scene.config.objects.map((o) =>
+                    o.id === next.id ? next : o,
+                  ),
+                },
+              })
+            }
+            onDelete={() =>
+              change({
+                elevation: {
+                  ...scene.config,
+                  objects: scene.config.objects.filter(
+                    (o) => o.id !== objectEditId,
+                  ),
+                },
+              })
+            }
+          />
+        )}
         {moveItem && (
           <Modal
             title={`Pomeri ${codes.get(moveItem.id)}`}

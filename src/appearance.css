@@ -347,3 +347,10 @@
 .combo-details > h2 { padding-left: 0; }
 .appearance-subtitle { margin: 14px 2px 6px; font-size: 17px; color: #352013; }
 .combo-text small.combo-used { color: #3d6b3a; font-weight: 600; }
+
+/* 3D pregled */
+.kitchen-view-modes { gap: 6px; }
+.kitchen-3d-canvas { position: relative; width: 100%; height: min(60vh, 460px); min-height: 300px; border-top: 1px solid #ead8bd; touch-action: none; background: #faf6ef; }
+.kitchen-3d-canvas canvas { display: block; width: 100% !important; height: 100% !important; }
+.kitchen-fullscreen .kitchen-3d-canvas { height: calc(100dvh - 120px); }
+.kitchen-3d-hint { margin: 0; padding: 8px 12px; font-size: 14px; color: #7a5a3d; }
