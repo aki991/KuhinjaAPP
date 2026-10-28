@@ -78,3 +78,39 @@ it("slobodna mera do kraja zida se smanjuje za širinu postavljenog elementa", (
   expect(free(1)).toEqual([2600]);
   expect(free(2)).toEqual([2000]);
 });
+
+it("slobodna mera u visećem redu ne prolazi preko frižidera", () => {
+  const o = createOffer();
+  o.layout = { walls: [{ id: "A", name: "Zid A", length: 3000 }], activeWall: "A", version: 3, spacers: [] };
+  o.elements = [newElement("fridge"), newElement("base1"), newElement("wall1")];
+  const scene = elevationScene(ensureLayout(o), "A");
+  const html = renderToStaticMarkup(createElement(WallElevation, { scene, scale: 0.1, selected: null }));
+  const free = [...html.matchAll(/data-free-length="([0-9]+)"/g)].map((m) => Number(m[1]));
+  // donji red: 3000 - 600 - 600 = 1800; viseći red: od kraja visećeg (1200) do zida = 1800, bez 600 iznad frižidera
+  expect(free).toEqual([1800, 1800]);
+});
+
+it("deo zida koji zauzima ugaoni element susednog zida je sivo polje sa imenom tog zida", () => {
+  const o = createOffer();
+  o.layout = {
+    walls: [
+      { id: "A", name: "Zid A", length: 2400 },
+      { id: "B", name: "Zid B", length: 2400 },
+    ],
+    activeWall: "A",
+    version: 3,
+    spacers: [],
+  };
+  const corner = newElement("reference014");
+  corner.placement = { wall: "A", row: "base", order: 1, offset: 0 };
+  const a = newElement("base1");
+  a.placement = { wall: "A", row: "base", order: 0, offset: 0 };
+  a.width = 1350;
+  const b = newElement("base1");
+  b.placement = { wall: "B", row: "base", order: 0, offset: 0 };
+  o.elements = [a, corner, b];
+  const scene = elevationScene(ensureLayout(o), "B");
+  const html = renderToStaticMarkup(createElement(WallElevation, { scene, scale: 0.1, selected: null }));
+  expect(html).toContain('data-occupied-by="Zid A"');
+  expect(html).toContain(">Zid A<");
+});

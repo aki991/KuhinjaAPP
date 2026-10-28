@@ -286,3 +286,6 @@ button[aria-label^="Obriši"],
 .technical-free path { stroke: #8b979f; stroke-width: 0.8; stroke-dasharray: 4 3; fill: none; }
 .technical-free .technical-free-label { fill: #fff; stroke: none; }
 .technical-free text { font-size: 11px; fill: #5a6a74; stroke: none; }
+
+.technical-occupied rect { fill: #e9eaea; stroke: #b9bec1; stroke-width: 0.8; stroke-dasharray: 4 3; }
+.technical-occupied text { fill: #6c777d; stroke: none; font-weight: 600; }

@@ -394,6 +394,15 @@ export function buildScene(offer: Offer) {
       }
       return;
     }
+    const blind =
+      item.kind === "reference014" ? 550 : item.kind === "reference035" ? 360 : 0;
+    if (blind && w > blind + 150) {
+      // Blind corner: a door on the open side, a 50 mm mask, the blind part behind the next wall.
+      panel(x, y, w - blind, h - top, false, true);
+      box(g, x + w - blind, y, zFront, 50, h - top, FRONT, front, item);
+      if (gola) box(g, x, y + h - top, zFront, w - blind + 50, top, FRONT * 0.6, golaMat, item);
+      return;
+    }
     if (["reference020", "reference026", "reference066"].includes(item.kind)) {
       // Pull-out with wire baskets: one front and a wire frame behind it.
       panel(x, y, w, h - top, true, false, true);
@@ -423,8 +432,12 @@ export function buildScene(offer: Offer) {
         ["liftDouble", "liftFolding"].includes(item.kind);
       if (stacked) {
         const dh = (usable - GAP * (doors - 1)) / doors;
-        for (let i = 0; i < doors; i++)
-          panel(x, y + i * (dh + GAP), w, dh, false, i % 2 === 1);
+        for (let i = 0; i < doors; i++) {
+          // Doors are counted from the top, as in the front view and the element editor.
+          const k = doors - 1 - i,
+            hinge = item.visual?.hinges?.[k] ?? (k % 2 === 0 ? "left" : "right");
+          panel(x, y + i * (dh + GAP), w, dh, false, hinge === "right");
+        }
       } else {
         const dw = (w - GAP * (doors - 1)) / doors;
         for (let i = 0; i < doors; i++)
@@ -966,15 +979,17 @@ export default function Kitchen3DViewport({
           {opened ? <DoorClosed size={18} /> : <DoorOpen size={18} />}{" "}
           {opened ? "Zatvori sve" : "Otvori sve"}
         </button>
-        {!fullscreen && toolbarExtra}
         {!fullscreen && onFullscreen && (
           <button
-            className="icon-btn"
+            className="text-btn"
             aria-label="Prikaz preko celog ekrana"
             onClick={onFullscreen}
           >
-            <Maximize size={20} />
+            <Maximize size={18} /> Ceo ekran
           </button>
+        )}
+        {!fullscreen && toolbarExtra && (
+          <div className="elevation-toolbar-row2">{toolbarExtra}</div>
         )}
       </div>
       <div

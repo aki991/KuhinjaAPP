@@ -436,9 +436,11 @@ export default function ElementSVG({
                 hinge={
                   count === 1
                     ? item!.visual?.hinge || "left"
-                    : i % 2 === 0
-                      ? "left"
-                      : "right"
+                    : tall
+                      ? item!.visual?.hinges?.[i] ?? (i % 2 === 0 ? "left" : "right")
+                      : i % 2 === 0
+                        ? "left"
+                        : "right"
                 }
                 handles={handles}
                 glass={!!item!.visual?.glass}

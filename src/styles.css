@@ -2210,3 +2210,15 @@ th {
 .wall-measure-left .wall-length { min-height: 0; padding: 2px 0; }
 .wall-measure > .wall-measure-left .wall-length strong { margin-left: 0; color: inherit; }
 .wall-measure-left .preset-open { display: flex; margin: 0; white-space: nowrap; }
+
+/* Viewport toolbar: Uklopi, Kote, Ceo ekran on top; Obriši sve and the arrows right under them. */
+.elevation-toolbar { row-gap: 0; padding-block: 1px; }
+.elevation-toolbar .text-btn svg { flex: none; }
+.elevation-toolbar > .elevation-toolbar-row2 { flex: 1 0 100%; display: flex; align-items: center; gap: 2px; }
+.elevation-toolbar > .elevation-toolbar-row2 button { min-height: 30px; padding-block: 0; }
+/* Tighter rows: the toolbar takes as little height as possible. */
+.elevation-view > .elevation-toolbar { padding-block: 0; }
+.elevation-view > .elevation-toolbar button,
+.elevation-view > .elevation-toolbar .text-btn { min-height: 36px; }
+.elevation-view > .elevation-toolbar > .elevation-toolbar-row2 button { min-height: 30px; }
+.elevation-toolbar-row2 .history-first { margin-left: auto; }

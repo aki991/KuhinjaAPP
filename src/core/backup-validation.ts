@@ -224,6 +224,9 @@ function validVisual(v: ElementVisual | undefined) {
     (!!v &&
       typeof v === "object" &&
       (v.hinge === undefined || ["left", "right"].includes(v.hinge)) &&
+      (v.hinges === undefined ||
+        (Array.isArray(v.hinges) &&
+          v.hinges.every((h) => ["left", "right"].includes(h)))) &&
       (v.glass === undefined || typeof v.glass === "boolean") &&
       (v.hob === undefined || typeof v.hob === "boolean") &&
       (v.applianceColor === undefined ||

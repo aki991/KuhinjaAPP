@@ -433,3 +433,8 @@
 .wall-tabs > .add-wall { height: 36px; min-width: 36px; padding: 5px; }
 .kitchen-view-modes { gap: 4px; }
 .kitchen-view-modes button { min-height: 36px; padding: 5px 9px; font-size: 14px; }
+
+/* White-goods colour: the label on its own line, three compact buttons in one row (fits 360 px). */
+.appliance-colors-label { display: block; margin-top: 10px; font-size: 0.85rem; opacity: 0.8; }
+.choice-buttons.appliance-colors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+.choice-buttons.appliance-colors > button { min-height: 38px; padding: 4px 8px; justify-content: center; gap: 6px; font-size: 15px; }

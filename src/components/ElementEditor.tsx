@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { LockKeyhole } from "lucide-react";
 import { categories, templates } from "../core/catalog";
 import { referenceDescriptions } from "../core/reference-descriptions";
-import { appendPlacement, isBridge } from "../core/layout";
+import { appendPlacement, isBridge, rowOf } from "../core/layout";
 import type {
   Category,
   KitchenElement,
@@ -112,6 +112,11 @@ export default function ElementEditor({
   );
   const t = templates.find((t) => t.kind === element.kind)!;
   const description = referenceDescriptions[element.kind] ?? t.rule;
+  // Tall cabinets with doors one above the other: each door gets its own side.
+  const stackedDoors =
+    rowOf(value) === "tall" &&
+    value.doors >= 2 &&
+    typeAppliance(value) === "none";
   const canChangeHinge = (value.doors === 1 || hoodDrop(value) > 0) && !["lift", "liftDouble", "liftFolding"].includes(value.kind) && !["fridge", "dishwasher", "oven"].includes(value.visual?.appliance || "");
   const numeric = (
     key:
@@ -371,6 +376,29 @@ export default function ElementEditor({
                   </select>
                 </Field>
               )}
+              {stackedDoors ? (
+                Array.from({ length: value.doors }, (_, i) => (
+                  <Field
+                    key={i}
+                    label={`Smer otvaranja — ${i === 0 ? "gornja vrata" : i === value.doors - 1 ? "donja vrata" : `vrata ${i + 1}`}`}
+                  >
+                    <select
+                      value={value.visual?.hinges?.[i] ?? (i % 2 === 0 ? "left" : "right")}
+                      onChange={(e) => {
+                        const hinges = Array.from(
+                          { length: value.doors },
+                          (_, j) => value.visual?.hinges?.[j] ?? (j % 2 === 0 ? "left" : "right"),
+                        ) as ("left" | "right")[];
+                        hinges[i] = e.target.value as "left" | "right";
+                        setValue({ ...value, visual: { ...value.visual, hinges } });
+                      }}
+                    >
+                      <option value="left">Levo</option>
+                      <option value="right">Desno</option>
+                    </select>
+                  </Field>
+                ))
+              ) : (
               <Field label="Smer otvaranja vrata">
                 <select disabled={!canChangeHinge} value={canChangeHinge ? value.visual?.hinge || (value.drawers > 0 ? "right" : "left") : "none"}
                   onChange={(e) => setValue({ ...value, visual: { ...value.visual, hinge: e.target.value as "left" | "right" } })}>
@@ -379,6 +407,7 @@ export default function ElementEditor({
                   <option value="right">Desno</option>
                 </select>
               </Field>
+              )}
             <Field label="Otvaranje">
               <select
                 value={value.selection.opening}

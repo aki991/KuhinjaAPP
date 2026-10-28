@@ -370,7 +370,15 @@ export default function KitchenView({
   const toolbarButtons = (
     <>
       <button
-        className="icon-btn history-btn"
+        className="text-btn clear-all"
+        aria-label="Obriši sve elemente"
+        disabled={!offer.elements.length}
+        onClick={() => setClearModal(true)}
+      >
+        <Trash2 size={17} /> Obriši sve
+      </button>
+      <button
+        className="icon-btn history-btn history-first"
         aria-label="Poništi poslednju izmenu"
         title="Poništi (Ctrl+Z)"
         disabled={!history.current.past.length}
@@ -386,14 +394,6 @@ export default function KitchenView({
         onClick={redo}
       >
         <Redo2 size={19} />
-      </button>
-      <button
-        className="text-btn clear-all"
-        aria-label="Obriši sve elemente"
-        disabled={!offer.elements.length}
-        onClick={() => setClearModal(true)}
-      >
-        <Trash2 size={17} /> Obriši sve
       </button>
     </>
   );

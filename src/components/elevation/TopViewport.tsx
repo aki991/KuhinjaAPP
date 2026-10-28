@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { LocateFixed, Maximize, Minus, Plus, X } from "lucide-react";
+import { LocateFixed, Maximize, Minus, Plus, Ruler, X } from "lucide-react";
 import type { ElevationScene } from "../../core/elevation";
 import type { KitchenWall, LayoutItem, Offer } from "../../core/types";
 import { isSpacer } from "../../core/layout";
@@ -157,9 +157,8 @@ export default function TopViewport({
           aria-pressed={dimensions}
           onClick={() => setDimensions((d) => !d)}
         >
-          Kote
+          <Ruler size={18} /> Kote
         </button>
-        {!fullscreen && toolbarExtra}
         {fullscreen && (
           <button className="text-btn" onClick={onFront}>
             Spreda
@@ -167,11 +166,11 @@ export default function TopViewport({
         )}
         {!fullscreen && (
           <button
-            className="icon-btn"
+            className="text-btn"
             aria-label="Prikaz preko celog ekrana"
             onClick={onFullscreen}
           >
-            <Maximize size={20} />
+            <Maximize size={18} /> Ceo ekran
           </button>
         )}
         {fullscreen && walls.length > 1 && (
@@ -187,6 +186,9 @@ export default function TopViewport({
               </option>
             ))}
           </select>
+        )}
+        {!fullscreen && toolbarExtra && (
+          <div className="elevation-toolbar-row2">{toolbarExtra}</div>
         )}
         <div
           className="top-filters choice-buttons"

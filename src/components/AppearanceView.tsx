@@ -356,14 +356,14 @@ export default function AppearanceView({
         <p className="combo-hint">
           Samo za vizuelni prikaz kuhinje: ne ulazi u cenu ni u ponudu.
         </p>
+        <span className="field-label appliance-colors-label">
+          Boja bele tehnike (frižider, rerna, aspirator)
+        </span>
         <div
-          className="choice-buttons gola-colors"
+          className="choice-buttons gola-colors appliance-colors"
           role="group"
           aria-label="Boja bele tehnike"
         >
-          <span className="field-label">
-            Boja bele tehnike (frižider, rerna, aspirator)
-          </span>
           {(["black", "white", "gray"] as const).map((c) => (
             <button
               key={c}

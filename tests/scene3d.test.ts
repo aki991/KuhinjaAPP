@@ -162,3 +162,17 @@ it("vrata staju i kada udare u zid ili stub sobe, ne samo u drugi element", () =
   for (let i = 0; i < 200; i++) step();
   expect(door.t).toBeLessThan(0.99);
 });
+
+it("visoki element sa dvoja vrata jedna iznad drugih: svaka vrata imaju svoj smer", () => {
+  const o = createOffer();
+  const pantry = newElement("tallPantry");
+  pantry.visual = { ...pantry.visual, hinges: ["right", "right"] };
+  o.elements = [pantry];
+  const { movers } = buildScene(ensureLayout(o));
+  expect(movers).toHaveLength(2);
+  expect(movers.every((m) => m.sign === 1)).toBe(true);
+  pantry.visual = { ...pantry.visual, hinges: ["left", "right"] };
+  const again = buildScene(ensureLayout(o)).movers;
+  // vrata se crtaju odozdo: donja (desno) pa gornja (levo)
+  expect(again.map((m) => m.sign)).toEqual([1, -1]);
+});

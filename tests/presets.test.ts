@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createOffer } from "../src/core/db";
 import { demoPrices } from "../src/core/catalog";
 import { siteMaterials } from "../src/core/site-materials";
@@ -100,4 +100,74 @@ it("pregled svakog predloga se crta za sve zidove", async () => {
     for (const wall of out.layout!.walls)
       expect(() => elevationScene(out, wall.id), preset.name).not.toThrow();
   }
+});
+
+describe("logika slaganja predloga", () => {
+  const lengths = [2400, 2700, 3000, 3200, 3600, 4200];
+  const cases: [string, number[]][] = [];
+  for (const a of lengths) cases.push(["Prava kuhinja", [a]]);
+  for (const a of lengths) for (const b of lengths) cases.push(["L kuhinja", [a, b]]);
+  for (const a of [2400, 3000, 3600]) for (const b of lengths) for (const c of [2400, 3000, 3600])
+    cases.push(["U kuhinja", [a, b, c]]);
+
+  it("ugaoni element je poslednji na zidu i stoji uz sam ugao; nema preklapanja ni upozorenja", { timeout: 60000 }, async () => {
+    const { elevationScene } = await import("../src/core/elevation");
+    const { kitchenPlan } = await import("../src/core/top-view");
+    for (const preset of presets)
+      for (const [shape, ls] of cases) {
+        const out = ensureLayout(applyPreset(offerFor(shape, ls), preset, products));
+        const label = `${preset.name} ${shape} ${ls.join("/")}`;
+        const walls = out.layout!.walls.filter((w) => w.id !== "island");
+        walls.forEach((wall, i) => {
+          const base = out.elements
+            .filter((e) => e.placement?.wall === wall.id && laneOf(e) === "base")
+            .sort((a, b) => a.placement!.offset - b.placement!.offset);
+          const corners = base.filter((e) => e.kind === "reference014");
+          if (i < walls.length - 1) {
+            expect(corners, label).toHaveLength(1);
+            expect(base.at(-1)!.kind, label).toBe("reference014");
+            expect(endOf(base.at(-1)!), label).toBe(wall.length);
+          } else expect(corners, label).toHaveLength(0);
+          for (let k = 1; k < base.length; k++)
+            expect(base[k].placement!.offset, label).toBeGreaterThanOrEqual(endOf(base[k - 1]));
+          // frižider i ostava nikad nisu uz ugao
+          for (const tall of base.filter((e) => ["fridge", "tallPantry"].includes(e.kind))) {
+            const next = base[base.indexOf(tall) + 1];
+            expect(next?.kind, label).not.toBe("reference014");
+          }
+          expect(elevationScene(out, wall.id).warnings, label).toEqual([]);
+          // zid koji skreće u sledeći završava visećim slepim ugaonim, uz sam ugao
+          const uppers = out.elements
+            .filter((e) => e.placement?.wall === wall.id && laneOf(e) === "wall")
+            .sort((a, b) => a.placement!.offset - b.placement!.offset);
+          if (i < walls.length - 1 && preset.upper !== "minimal" && uppers.length) {
+            expect(uppers.at(-1)!.kind, label).toBe("reference035");
+            expect(endOf(uppers.at(-1)!), label).toBe(wall.length);
+          }
+          // viseći elementi dva zida se ne sudaraju u uglu
+          if (i > 0) {
+            const upper = (id: string) =>
+              out.elements
+                .filter((e) => e.placement?.wall === id && laneOf(e) === "wall")
+                .sort((a, b) => a.placement!.offset - b.placement!.offset);
+            const prevEnd = Math.max(0, ...upper(walls[i - 1].id).map(endOf));
+            const first = upper(wall.id)[0];
+            if (first && prevEnd >= walls[i - 1].length - 5)
+              expect(first.placement!.offset, label).toBeGreaterThanOrEqual(320);
+          }
+        });
+        const warnings = kitchenPlan(out, "all").warnings.filter((w) => !w.startsWith("Ostrvo"));
+        expect(warnings, label).toEqual([]);
+        const isSink = (k: string) => k === "sink" || k === "sinkOne";
+        expect(out.elements.some((e) => isSink(e.kind)), `${label} sudopera`).toBe(true);
+        for (const kind of ["oven", "fridge"])
+          expect(out.elements.some((e) => e.kind === kind), `${label} ${kind}`).toBe(true);
+        // sudopera i ploča nisu na istom zidu kada ima više zidova
+        if (walls.length > 1) {
+          const sink = out.elements.find((e) => isSink(e.kind))!,
+            oven = out.elements.find((e) => e.kind === "oven")!;
+          expect(sink.placement!.wall, label).not.toBe(oven.placement!.wall);
+        }
+      }
+  });
 });

@@ -479,11 +479,17 @@ export const presets: Preset[] = [
 export const presetById = (id: string | undefined) =>
   presets.find((p) => p.id === id);
 
-/** "Ugaoni slepi" from the catalogue: the first cabinet of the wall that leaves the corner. */
+/**
+ * "Ugaoni slepi" from the catalogue. Its blind part is drawn on the right, so it is the LAST cabinet of a
+ * wall, flush with the corner; the next wall gives up the cabinet depth at its start.
+ */
 const CORNER_KIND = "reference014" as ElementKind,
   CORNER_WIDTH = 1050,
-  /** Depth of that cabinet: the previous wall gives up this much at its end. */
+  /** The cabinet may grow this far, so the corner eats a small leftover instead of a filler. */
+  CORNER_MAX = 1250,
   CORNER_DEPTH = 560,
+  /** "Viseći slepi ugaoni": the same idea one row up, last wall cabinet of the wall (600–900 mm). */
+  UPPER_CORNER_KIND = "reference035" as ElementKind,
   MIN = 300,
   MAX = 900;
 type Slot = {
@@ -498,49 +504,56 @@ const fixed = (kind: ElementKind, width: number, priority: number): Slot => ({
   width,
   priority,
 });
-const flexSlot = (): Slot => ({ flex: true, priority: 0 });
+const flexSlot = (priority = 0): Slot => ({ flex: true, priority });
 
 /**
- * Which cabinets go on which wall: the longest wall gets the sink, the next one the hob, the rest the
- * fridge. The run of flexible cabinets takes whatever length remains.
+ * Which cabinets go on which wall. The fridge and the tall pantry stand at the free ends of the
+ * kitchen (never against a corner), the sink and the hob get different walls, and there is always a
+ * run of cabinets between the hob and a corner or a tall cabinet when the length allows it.
  */
 function plans(lengths: number[]): Slot[][] {
   const count = lengths.length,
-    fridge = () => fixed("fridge", 600, 3),
+    fridge = () => fixed("fridge", 600, 4),
     sink = () => fixed("sink", 800, 9),
     dish = () => fixed("dishwasherBuilt", 600, 2),
     oven = () => fixed("oven", 600, 9),
     pantry = () => fixed("tallPantry", 600, 1),
-    corner = () => fixed(CORNER_KIND, CORNER_WIDTH, 8);
-  const room = lengths.map(
-    (length, i) =>
-      length - (i > 0 ? CORNER_WIDTH : 0) - (i < count - 1 ? CORNER_DEPTH : 0),
-  );
-  const rank = lengths.map((_, i) => i).sort((x, y) => room[y] - room[x]);
-  const zone: Slot[][] = lengths.map(() => []);
-  if (count === 1)
-    zone[0] = [
-      fridge(),
-      flexSlot(),
-      sink(),
-      dish(),
-      flexSlot(),
-      oven(),
-      flexSlot(),
-      ...(lengths[0] >= 3600 ? [pantry()] : []),
+    corner = () => fixed(CORNER_KIND, CORNER_WIDTH, 10);
+  if (count <= 1)
+    return [
+      [
+        fridge(),
+        flexSlot(1),
+        sink(),
+        dish(),
+        flexSlot(2),
+        oven(),
+        flexSlot(3),
+        ...(lengths[0] >= 3600 ? [pantry()] : []),
+      ],
     ];
-  else {
-    const [main, second, third] = rank;
-    zone[main] = [flexSlot(), sink(), dish(), flexSlot()];
-    zone[second] = [flexSlot(), oven(), flexSlot()];
-    if (count === 2) zone[main].unshift(fridge());
-    else zone[third] = [fridge(), flexSlot()];
-    // A tall pantry stands at the free end of the first or last wall.
-    const pantryWall = count === 2 ? second : zone[third].length ? third : second;
-    if (pantryWall === 0) zone[pantryWall].unshift(pantry());
-    else if (pantryWall === count - 1) zone[pantryWall].push(pantry());
+  const usable = lengths.map(
+    (length, i) =>
+      length - (i > 0 ? CORNER_DEPTH : 0) - (i < count - 1 ? CORNER_WIDTH : 0),
+  );
+  const last = count - 1;
+  if (count === 2) {
+    // Sink and dishwasher (1400) on the roomier wall, counting the fridge on wall A.
+    const sinkOnA = usable[0] - 600 >= usable[1];
+    const a = sinkOnA ? [sink(), dish()] : [oven()],
+      b = sinkOnA ? [oven()] : [sink(), dish()];
+    return [
+      [fridge(), flexSlot(1), ...a, flexSlot(3), corner()],
+      [flexSlot(3), ...b, flexSlot(2), pantry()],
+    ];
   }
-  return zone.map((list, i) => (i > 0 ? [corner(), ...list] : list));
+  // U: the sink in the middle wall, the hob on whichever end wall has more room.
+  const ovenOnA = usable[0] - 600 > usable[last] - 600;
+  return [
+    [fridge(), flexSlot(1), ...(ovenOnA ? [oven()] : []), flexSlot(3), corner()],
+    [flexSlot(2), sink(), dish(), flexSlot(2), corner()],
+    [flexSlot(3), ...(ovenOnA ? [] : [oven()]), flexSlot(1), pantry()],
+  ];
 }
 
 /** Widths for one run of flexible cabinets, as even as possible between 300 and 900 mm. */
@@ -671,11 +684,12 @@ export function applyPreset(
     return el;
   };
 
-  // Lower cabinets and tall cabinets, wall by wall.
+  // Lower cabinets and tall cabinets, wall by wall. Each wall is filled exactly, so a corner cabinet
+  // always ends at the corner.
   const slots = plans(walls.map((w) => w.length));
   let runIndex = 0;
   walls.forEach((wall, i) => {
-    const available = wall.length - (i < walls.length - 1 ? CORNER_DEPTH : 0);
+    const available = wall.length - (i > 0 ? CORNER_DEPTH : 0);
     let list = [...(slots[i] ?? [])];
     const total = () =>
       list.reduce((sum, s) => sum + (s.flex ? 0 : (s.width ?? 0)), 0);
@@ -684,21 +698,52 @@ export function applyPreset(
         .filter((s) => !s.flex)
         .sort((a, b) => a.priority - b.priority)[0];
       if (!least) break;
+      // A narrow wall keeps its sink: the 60 cm single-door sink cabinet takes its place.
+      if (least.kind === "sink" && least.width! > 600) {
+        least.kind = "sinkOne";
+        least.width = 600;
+        continue;
+      }
       list = list.filter((s) => s !== least);
     }
-    let flexSlots = list.filter((s) => s.flex);
-    let share = flexSlots.length
-      ? (available - total()) / flexSlots.length
-      : 0;
-    while (flexSlots.length && share < MIN) {
-      const last = flexSlots.at(-1)!;
-      list = list.filter((s) => s !== last);
-      flexSlots = flexSlots.slice(0, -1);
-      share = flexSlots.length ? (available - total()) / flexSlots.length : 0;
+    // Too short for every run: drop the least important runs until each one is at least 300 mm.
+    const rest = () => available - total();
+    let runs = list.filter((s) => s.flex);
+    while (runs.length && rest() / runs.length < MIN) {
+      const least = [...runs].sort((a, b) => a.priority - b.priority)[0];
+      list = list.filter((s) => s !== least);
+      runs = runs.filter((s) => s !== least);
     }
+    const free = Math.max(0, rest());
+    const shares = runs.map((_, j) =>
+      Math.floor(free / runs.length) + (j === 0 ? free % runs.length : 0),
+    );
+    // Without any run, the corner cabinet (then the sink) takes what is left; the rest stays open.
+    let leftover = runs.length ? 0 : free;
+    const cornerSlot = list.find((s) => s.kind === CORNER_KIND);
+    if (leftover && cornerSlot) {
+      const grow = Math.min(leftover, CORNER_MAX - cornerSlot.width!);
+      cornerSlot.width = cornerSlot.width! + grow;
+      leftover -= grow;
+    }
+    const sinkSlot = list.find((s) => s.kind === "sink");
+    if (leftover && sinkSlot) {
+      const grow = Math.min(leftover, 1200 - sinkSlot.width!);
+      sinkSlot.width = sinkSlot.width! + grow;
+      leftover -= grow;
+    }
+    let run = 0;
     for (const slot of list) {
+      if (slot === cornerSlot && leftover > 0) {
+        // An open gap in front of the corner keeps the corner cabinet against the corner.
+        const gap = newSpacer(wall.id, "base", leftover);
+        const order = orders.get(`${wall.id}:base`) ?? 0;
+        orders.set(`${wall.id}:base`, order + 1);
+        gap.placement = { wall: wall.id, row: "base", order, offset: 0 };
+        layout.spacers!.push(gap);
+      }
       if (slot.flex) {
-        const widths = runWidths(Math.floor(share));
+        const widths = runWidths(shares[run++]);
         widths.forEach((w, j) => {
           const el = place(
             wall.id,
@@ -754,6 +799,7 @@ export function applyPreset(
       width: el.width,
       spacer: isSpacer(el),
       depth: isSpacer(el) ? 0 : el.depth,
+      corner: el.kind === UPPER_CORNER_KIND,
     });
     if (isSpacer(el)) spacers.push(el);
     else work.elements.push(el);
@@ -762,7 +808,10 @@ export function applyPreset(
    * The next wall gives up the depth of the last wall cabinet when the cabinets of a wall add up to
    * (nearly) its length; this is the same rule the layout applies, so both agree on the start.
    */
-  const upperRuns = new Map<string, { width: number; spacer: boolean; depth: number }[]>();
+  const upperRuns = new Map<
+    string,
+    { width: number; spacer: boolean; depth: number; corner: boolean }[]
+  >();
   const reserved = new Map<string, number>();
   const reservationAt = (wallId: string): number => {
     const index = walls.findIndex((w) => w.id === wallId);
@@ -771,21 +820,51 @@ export function applyPreset(
       run = upperRuns.get(before.id) ?? [],
       last = run.at(-1);
     if (!last || last.spacer) return 0;
+    // A corner cabinet always reserves its depth at the start of the next wall.
+    if (last.corner) return last.depth;
     const used = (reserved.get(before.id) ?? 0) + run.reduce((a, r) => a + r.width, 0);
     return used > before.length - 320 || used >= before.length ? last.depth : 0;
   };
-  walls.forEach((wall) => {
+  /** Where the wall cabinets of a wall really end (gaps for tall cabinets included). */
+  const reach = new Map<string, number>();
+  walls.forEach((wall, wallIndex) => {
     const items = [...work.elements, ...spacers],
       blocks = blockedSpans(items, wall.id, "wall", work.elevation),
       start = reservationAt(wall.id);
     reserved.set(wall.id, start);
     const segments: { a: number; b: number }[] = [];
     let cursor = start;
+    // The previous wall's cabinets run into the corner, but the layout does not reserve it here
+    // (a tall cabinet left a gap in that row): keep the corner free with a gap of one cabinet depth.
+    const before = walls[wallIndex - 1];
+    if (
+      before &&
+      !start &&
+      (reach.get(before.id) ?? 0) >= before.length - 5 &&
+      !blocks.some((b) => b.start <= 0 && b.end >= 320)
+    ) {
+      placeUpper(wall.id, newSpacer(wall.id, "wall", 320));
+      cursor = 320;
+    }
     for (const s of blocks) {
       if (s.start > cursor) segments.push({ a: cursor, b: Math.min(s.start, wall.length) });
       cursor = Math.max(cursor, s.end);
     }
     if (cursor < wall.length) segments.push({ a: cursor, b: wall.length });
+    // A wall that turns into the next one ends with the upper blind corner cabinet, flush with the corner.
+    const lastSegment = segments.at(-1);
+    let upperCorner = 0;
+    if (
+      preset.upper !== "minimal" &&
+      wallIndex < walls.length - 1 &&
+      lastSegment &&
+      lastSegment.b >= wall.length - 0.5 &&
+      lastSegment.b - lastSegment.a >= 600
+    ) {
+      upperCorner = Math.min(900, Math.floor(lastSegment.b - lastSegment.a));
+      lastSegment.b -= upperCorner;
+      if (lastSegment.b - lastSegment.a < 1) segments.pop();
+    }
     const oven = work.elements.find(
       (e) => e.placement?.wall === wall.id && e.kind === "oven",
     );
@@ -824,12 +903,14 @@ export function applyPreset(
               true,
             ),
           );
+          reach.set(wall.id, Math.max(reach.get(wall.id) ?? 0, part.to));
           continue;
         }
         if (len <= 0) continue;
         if (preset.upper === "minimal" || len < 250) {
-          // Leave the stretch empty, but keep the hood where it belongs.
-          if (hasHood && len > 0) placeUpper(wall.id, newSpacer(wall.id, "wall", len));
+          // Leave the stretch empty, but keep the hood and the corner cabinet where they belong.
+          if ((hasHood || upperCorner) && len > 0)
+            placeUpper(wall.id, newSpacer(wall.id, "wall", len));
           continue;
         }
         runWidths(len).forEach((w) => {
@@ -837,7 +918,12 @@ export function applyPreset(
           placeUpper(wall.id, el);
           flexible.add(el.id);
         });
+        reach.set(wall.id, Math.max(reach.get(wall.id) ?? 0, part.to));
       }
+    }
+    if (upperCorner) {
+      placeUpper(wall.id, make(UPPER_CORNER_KIND, upperCorner, true));
+      reach.set(wall.id, wall.length);
     }
   });
   work = {

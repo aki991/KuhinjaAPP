@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { LocateFixed, Maximize, Minus, Plus, X } from "lucide-react";
+import { LocateFixed, Maximize, Minus, Plus, Ruler, X } from "lucide-react";
 import {
   elevationCamera,
   containedElevationCamera,
@@ -352,9 +352,8 @@ export default function ElevationViewport({
           aria-pressed={showDimensions}
           onClick={() => setShowDimensions((value) => !value)}
         >
-          Kote
+          <Ruler size={18} /> Kote
         </button>
-        {!fullscreen && toolbarExtra}
         {fullscreen ? (
           walls.length > 1 && (
             <select
@@ -373,11 +372,11 @@ export default function ElevationViewport({
         ) : (
           <div className="elevation-toolbar-extra">
             <button
-              className="icon-btn"
+              className="text-btn"
               aria-label="Prikaz preko celog ekrana"
               onClick={onFullscreen}
             >
-              <Maximize size={21} />
+              <Maximize size={18} /> Ceo ekran
             </button>
           </div>
         )}
@@ -385,6 +384,9 @@ export default function ElevationViewport({
           <button className="text-btn" onClick={onTopView}>
             Odozgo
           </button>
+        )}
+        {!fullscreen && toolbarExtra && (
+          <div className="elevation-toolbar-row2">{toolbarExtra}</div>
         )}
       </div>
       <div

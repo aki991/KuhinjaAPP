@@ -252,6 +252,8 @@ export type VisualAppliance =
   "auto" | "none" | "oven" | "sink" | "hob" | "fridge" | "dishwasher";
 export interface ElementVisual {
   hinge?: "left" | "right";
+  /** Tall cabinets with doors one above the other: the hinge side of each door, top first. */
+  hinges?: ("left" | "right")[];
   glass?: boolean;
   appliance?: VisualAppliance;
   /** Overrides the project colour of this appliance. */

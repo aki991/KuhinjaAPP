@@ -87,6 +87,8 @@ export interface ElevationScene {
   wallTile?: string;
   /** Length at both ends of each row taken by a corner cabinet of the neighbouring wall. */
   reserved?: Record<"base" | "wall", { start: number; end: number }>;
+  /** The same lengths with the name of the wall whose corner cabinet takes them. */
+  occupied?: { row: "base" | "wall"; edge: "start" | "end"; size: number; wall: string }[];
 }
 export const defaultElevation = (): ElevationConfig => ({
   version: 1,
@@ -523,6 +525,14 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
     warnings: [...new Set(warnings)],
     config,
     wallTile: offer.selection.wallTile,
+    occupied: reservations
+      .filter((r) => r.wall === wall.id)
+      .map((r) => ({
+        row: r.row,
+        edge: r.edge,
+        size: r.size,
+        wall: layout.walls.find((w) => w.id === r.sourceWall)?.name ?? r.sourceWall,
+      })),
     reserved: {
       base: {
         start: reservedLength(reservations, wall.id, "base", "start"),

@@ -1,4 +1,4 @@
-import { isBridge, isSpacer } from "../../core/layout";
+import { isBridge, isSpacer, rowOf } from "../../core/layout";
 import { isFreestanding } from "../../core/catalog";
 import { tileById } from "../../core/tiles";
 import { tileImage } from "./tileTexture";
@@ -51,10 +51,21 @@ export default function WallElevation({
   /** Free length between the cabinets of a row and the ends of the wall; it shrinks as cabinets are added. */
   const freeRuns: { x0: number; x1: number; y: number; value: number }[] = [];
   for (const row of ["base", "wall"] as const) {
-    const items = scene.entries.filter(
-      (e) => e.row === row && !isSpacer(e.item),
-    );
-    if (!scene.entries.length || (row === "wall" && !items.length)) continue;
+    const own = scene.entries.filter((e) => e.row === row && !isSpacer(e.item));
+    if (!scene.entries.length || (row === "wall" && !own.length)) continue;
+    // A tall cabinet (fridge, pantry) also fills the wall-cabinet row.
+    const items =
+      row === "wall"
+        ? [
+            ...own,
+            ...scene.entries.filter(
+              (e) =>
+                !isSpacer(e.item) &&
+                rowOf(e.item) === "tall" &&
+                e.rect.y + e.rect.height > scene.upperBottom,
+            ),
+          ]
+        : own;
     const reserved = scene.reserved?.[row] ?? { start: 0, end: 0 },
       mid = row === "base" ? scene.baseTop / 2 : scene.upperBottom + 360,
       y = margin.top + (scene.height - mid) * scale,
@@ -130,6 +141,28 @@ export default function WallElevation({
           data-room-tile={scene.wallTile}
         />
       )}
+      {(scene.occupied ?? []).map((zone, i) => {
+        // Part of this wall taken by the corner cabinet of the neighbouring wall.
+        const bottom = zone.row === "base" ? 0 : scene.upperBottom,
+          top = zone.row === "base" ? scene.baseTop : scene.upperBottom + 720,
+          x = zone.edge === "start" ? 0 : scene.length - zone.size,
+          r = screen({ x, y: bottom, width: zone.size, height: top - bottom });
+        return (
+          <g key={i} className="technical-occupied" data-occupied-by={zone.wall}>
+            <rect {...r} />
+            {r.width >= 26 && (
+              <text
+                x={r.x + r.width / 2}
+                y={r.y + r.height / 2 + 4}
+                textAnchor="middle"
+                fontSize={Math.min(13, r.width / 4)}
+              >
+                {zone.wall}
+              </text>
+            )}
+          </g>
+        );
+      })}
       {scene.objects.map((o, index) => (
         <g key={o.id}>
           <VisualAddition
