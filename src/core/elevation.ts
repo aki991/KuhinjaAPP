@@ -85,6 +85,8 @@ export interface ElevationScene {
   config: ElevationConfig;
   /** Tile ids chosen for the room, drawn behind the kitchen. */
   wallTile?: string;
+  /** Length at both ends of each row taken by a corner cabinet of the neighbouring wall. */
+  reserved?: Record<"base" | "wall", { start: number; end: number }>;
 }
 export const defaultElevation = (): ElevationConfig => ({
   version: 1,
@@ -521,6 +523,16 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
     warnings: [...new Set(warnings)],
     config,
     wallTile: offer.selection.wallTile,
+    reserved: {
+      base: {
+        start: reservedLength(reservations, wall.id, "base", "start"),
+        end: reservedLength(reservations, wall.id, "base", "end"),
+      },
+      wall: {
+        start: reservedLength(reservations, wall.id, "wall", "start"),
+        end: reservedLength(reservations, wall.id, "wall", "end"),
+      },
+    },
   };
 }
 export const frontBounds = (e: ElevationEntry): Rect => ({

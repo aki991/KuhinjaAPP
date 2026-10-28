@@ -2186,3 +2186,27 @@ th {
   font-size: 12px;
   opacity: 0.7;
 }
+
+.preset-open { display: inline-flex; align-items: center; gap: 6px; }
+.preset-picker { display: grid; gap: 12px; }
+.preset-description { margin: 0; color: #4d687e; font-size: 15px; line-height: 1.5; }
+.preset-swatches { display: flex; flex-wrap: wrap; gap: 8px 16px; list-style: none; margin: 0; padding: 0; font-size: 14px; color: #4d687e; }
+.preset-swatches li { display: flex; align-items: center; gap: 6px; }
+.preset-swatch { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(0, 0, 0, 0.25); display: inline-block; }
+.preset-swatch-text { padding: 3px 9px; border-radius: 999px; background: #eef3f7; }
+.preset-preview { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: #faf9f5; padding: 6px; }
+.preset-preview svg { display: block; max-width: none; }
+.preset-note { margin: 0; font-size: 13px; color: #7f91a1; line-height: 1.5; }
+
+.preset-open { margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.elevation-toolbar .history-btn { min-width: 36px; width: 36px; min-height: 40px; }
+.elevation-toolbar .clear-all { font-size: 13px; padding-inline: 6px; }
+.elevation-toolbar { flex-wrap: wrap; }
+
+/* "Predlozi kuhinja" sits right under "Okviri i mere", only as wide as its text. */
+.wall-measure > .wall-measure-left { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+/* The section is only as tall as the free-space text on the right. */
+.wall-measure { min-height: 0; }
+.wall-measure-left .wall-length { min-height: 0; padding: 2px 0; }
+.wall-measure > .wall-measure-left .wall-length strong { margin-left: 0; color: inherit; }
+.wall-measure-left .preset-open { display: flex; margin: 0; white-space: nowrap; }

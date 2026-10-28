@@ -82,3 +82,83 @@ it("vrata bez prepreke se otvore do kraja", () => {
   expect(built.movers.length).toBeGreaterThan(0);
   expect(built.movers.every((m) => m.t > 0.99)).toBe(true);
 });
+
+it("izvlačni za boce ima žičane korpe koje se izvlače sa frontom", () => {
+  const o = createOffer();
+  o.elements = [newElement("reference020")];
+  const built = buildScene(ensureLayout(o));
+  expect(built.movers).toHaveLength(1);
+  const m = built.movers[0];
+  expect(m.kind).toBe("drawer");
+  // front, ručka i žice su na istom pokretnom delu
+  expect(m.pivot.children.length).toBeGreaterThan(30);
+  const step = createMoverStepper(built);
+  m.target = 1;
+  for (let i = 0; i < 100; i++) step();
+  expect(m.t).toBeGreaterThan(0.99);
+});
+
+it("mašina za sudove u 3D ima komandnu traku i svetla, nije običan element", () => {
+  const o = createOffer();
+  o.elements = [newElement("dishwasherBuilt")];
+  const plain = buildScene(ensureLayout(o));
+  let count = 0;
+  plain.root.traverse((m) => m instanceof THREE.Mesh && count++);
+  // karkas (5) + vrata + traka + svetla + ručka/prorez + ventilacija + pod
+  expect(count).toBeGreaterThan(14);
+  expect(plain.movers).toHaveLength(0);
+});
+
+it("sudopera u 3D: radna ploča je isečena, ispod je čelična šolja i slavina", () => {
+  const o = createOffer();
+  o.elements = [newElement("sink")];
+  const top = newElement("worktop", o.selection);
+  top.autoTopFor = "A";
+  o.elements.push(top);
+  const built = buildScene(ensureLayout(o));
+  let cylinders = 0;
+  built.root.traverse((m) => {
+    if (m instanceof THREE.Mesh && m.geometry instanceof THREE.CylinderGeometry) cylinders++;
+  });
+  // stub + izlivnik + vrh slavine
+  expect(cylinders).toBe(3);
+});
+
+it("aspirator element ima jedna vrata čiji se smer može menjati i u 3D prati izbor", () => {
+  for (const hinge of ["left", "right"] as const) {
+    const o = createOffer();
+    const hood = newElement("reference038");
+    expect(hood.doors).toBe(1);
+    hood.visual = { ...hood.visual, hinge };
+    o.elements = [hood];
+    const { movers } = buildScene(ensureLayout(o));
+    expect(movers).toHaveLength(1);
+    expect(movers[0].sign).toBe(hinge === "right" ? 1 : -1);
+  }
+});
+
+it("vrata staju i kada udare u zid ili stub sobe, ne samo u drugi element", () => {
+  const built = buildScene(ensureLayout(createOffer(true)));
+  const door = built.movers.find((m) => m.kind === "door")!;
+  door.t = 1;
+  poseMover(door);
+  door.pivot.updateMatrixWorld(true);
+  const mesh = door.pivot.children.find((c) => c instanceof THREE.Mesh) as THREE.Mesh;
+  const hit = new THREE.Box3().setFromObject(mesh);
+  door.t = 0;
+  poseMover(door);
+  const size = hit.getSize(new THREE.Vector3()),
+    center = hit.getCenter(new THREE.Vector3());
+  // zid je tanka ploča bez elementa
+  const wall = new THREE.Mesh(
+    new THREE.BoxGeometry(Math.max(size.x, 0.02), size.y, Math.max(size.z, 0.02)),
+    new THREE.MeshBasicMaterial(),
+  );
+  wall.position.copy(center);
+  wall.userData.obstacle = true;
+  built.root.add(wall);
+  const step = createMoverStepper(built);
+  door.target = 1;
+  for (let i = 0; i < 200; i++) step();
+  expect(door.t).toBeLessThan(0.99);
+});

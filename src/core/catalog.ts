@@ -464,7 +464,6 @@ const newTemplates: Template[] = [
     unsupported: true,
   }),
   derived("wallHood", "Element za aspirator", "Gornji", "wall1", {
-    visual: { appliance: "hob" },
     unsupported: true,
   }),
   derived("wallCorner", "Ugaoni viseći", "Gornji", "wall1", {
@@ -563,7 +562,12 @@ const referenceTemplates: Template[] = referenceCatalog.map((record) => {
     width: record.width,
     height: record.height,
     depth: record.depth,
-    doors: record.kind === "reference062" ? 2 : record.kind === "reference065" ? 1 : (base?.doors ?? record.doors),
+    doors:
+      record.kind === "reference062"
+        ? 2
+        : ["reference065", "reference038", "reference039"].includes(record.kind)
+          ? 1
+          : (base?.doors ?? record.doors),
     drawers: base?.drawers ?? record.drawers,
     shelves:
       record.kind === "reference029" || record.kind === "reference032"
@@ -622,7 +626,6 @@ const libraryKinds: Record<(typeof libraryGroups)[number], ElementKind[]> = {
     "oven",
     "dishwasherBuilt",
     "corner",
-    "cornerBlind",
     "baseOpen",
     "baseCargo",
   ],
@@ -636,7 +639,6 @@ const libraryKinds: Record<(typeof libraryGroups)[number], ElementKind[]> = {
     "wallGlass1",
     "wallGlass2",
     "open",
-    "wallHood",
     "wallCorner",
   ],
   Visoki: [

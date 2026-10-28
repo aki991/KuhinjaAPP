@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { DoorClosed, DoorOpen, Maximize, Scan, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { DoorClosed, DoorOpen, LocateFixed, Maximize, X } from "lucide-react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { OBB } from "three/examples/jsm/math/OBB.js";
@@ -73,10 +73,10 @@ export function createMoverStepper(built: { root: THREE.Object3D; movers: Mover[
   };
   const obstacles: { mesh: THREE.Mesh; item: unknown; moving: boolean; box: THREE.Box3 }[] = [];
   built.root.traverse((o) => {
-    if (o instanceof THREE.Mesh && o.userData.item)
+    if (o instanceof THREE.Mesh && (o.userData.item || o.userData.obstacle))
       obstacles.push({
         mesh: o,
-        item: o.userData.item,
+        item: o.userData.item ?? "room",
         moving: inMover(o),
         box: new THREE.Box3().setFromObject(o),
       });
@@ -160,6 +160,7 @@ export function buildScene(offer: Offer) {
     d: number,
     material: THREE.Material,
     item?: LayoutItem,
+    obstacle = false,
   ) => {
     if (w <= 0 || h <= 0 || d <= 0) return;
     const mesh = new THREE.Mesh(
@@ -171,6 +172,7 @@ export function buildScene(offer: Offer) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     if (item) mesh.userData.item = item;
+    if (obstacle) mesh.userData.obstacle = true;
     parent.add(mesh);
   };
   const wallTile = tileById(offer.selection.wallTile),
@@ -199,6 +201,8 @@ export function buildScene(offer: Offer) {
     roughness: 0.35,
     metalness: 0.6,
   });
+  const wireMat = mat(new THREE.Color("#c3c8cc"), { roughness: 0.3, metalness: 0.8 });
+  const steelMat = mat(new THREE.Color("#b6bcc0"), { roughness: 0.3, metalness: 0.8 });
   const dark = mat(new THREE.Color("#1f2223"), { roughness: 0.25 });
   const glass = mat(new THREE.Color("#bcd8e6"), {
     transparent: true,
@@ -235,6 +239,7 @@ export function buildScene(offer: Offer) {
       ph: number,
       drawer: boolean,
       hingeRight: boolean,
+      wire = false,
     ) => {
       const lift = !drawer && lifting,
         ox = !drawer && !lift && hingeRight ? px + pw : px,
@@ -263,7 +268,41 @@ export function buildScene(offer: Offer) {
         material: THREE.Material,
       ) => box(pivot, x - ox, y - oy, z - zFront - FRONT, w, h, d, material, item);
       b(px, py, zFront, pw, ph, FRONT, item.visual?.glass ? glass : front);
-      if (drawer && depth > 150 && ph > 90) {
+      if (wire && depth > 150) {
+        // Wire baskets on the pull-out frame: they slide out together with the front.
+        const inset = 30,
+          wx0 = px + inset,
+          ww = pw - 2 * inset,
+          z1 = zFront - 30,
+          z0 = zFront - depth + 40,
+          len = z1 - z0,
+          t = 5,
+          rim = 110,
+          count = ph > 1500 ? 5 : ph > 600 ? 2 : 1,
+          step = count > 1 ? (ph - 80 - rim) / (count - 1) : 0;
+        for (let i = 0; i < count; i++) {
+          const ly = count > 1 ? py + 40 + i * step : py + (ph - rim) / 2;
+          const rails = Math.max(2, Math.round(ww / 45) + 1),
+            cross = Math.max(2, Math.round(len / 60) + 1);
+          for (let r = 0; r < rails; r++)
+            b(wx0 + ((ww - t) * r) / (rails - 1), ly, z0, t, t, len, wireMat);
+          for (let c = 0; c < cross; c++)
+            b(wx0, ly, z0 + ((len - t) * c) / (cross - 1), ww, t, t, wireMat);
+          for (const [cx, cz] of [
+            [wx0, z0],
+            [wx0 + ww - t, z0],
+            [wx0, z1 - t],
+            [wx0 + ww - t, z1 - t],
+          ])
+            b(cx, ly, cz, t, rim, t, wireMat);
+          b(wx0, ly + rim, z0, ww, t, t, wireMat);
+          b(wx0, ly + rim, z1 - t, ww, t, t, wireMat);
+          for (const sx of [wx0, wx0 + ww - t]) {
+            b(sx, ly + rim, z0, t, t, len, wireMat);
+            b(sx, ly + rim / 2, z0, t, t, len, wireMat);
+          }
+        }
+      } else if (drawer && depth > 150 && ph > 90) {
         // The drawer box slides out together with its front.
         const tw = pw - 60,
           td = depth - 40,
@@ -322,6 +361,24 @@ export function buildScene(offer: Offer) {
           metalness: 0.2,
         }),
         grip = mat(new THREE.Color(st.detail), { roughness: 0.35, metalness: 0.6 });
+      if (appliance === "dishwasher") {
+        // Dishwasher: steel door under a dark control strip with lights, a horizontal handle
+        // (a recessed slot when the kitchen has no handles) and a vent at the bottom.
+        const strip = 90,
+          dark = mat(new THREE.Color("#2a2e30"), { roughness: 0.25, metalness: 0.4 }),
+          light = mat(new THREE.Color("#8fd6ff"), { roughness: 0.2 });
+        box(g, x, y, zFront, w, h - strip - GAP, FRONT, steel, item);
+        box(g, x, y + h - strip, zFront, w, strip, FRONT, dark, item);
+        for (let i = 0; i < 4; i++)
+          box(g, x + w * 0.62 + i * Math.min(40, w * 0.07), y + h - strip + 38, zFront + FRONT, 14, 14, 2, light, item);
+        box(g, x + w * 0.08, y + h - strip + 30, zFront + FRONT, w * 0.26, 28, 2, mat(new THREE.Color("#3d4244")), item);
+        if (handles)
+          box(g, x + w * 0.2, y + h - strip - 70, zFront + FRONT, w * 0.6, 14, 20, grip, item);
+        else box(g, x + w * 0.2, y + h - strip - 55, zFront + FRONT, w * 0.6, 10, 2, dark, item);
+        box(g, x + w * 0.1, y + 22, zFront + FRONT, w * 0.8, 6, 2, dark, item);
+        box(g, x + w * 0.1, y + 44, zFront + FRONT, w * 0.8, 6, 2, dark, item);
+        return;
+      }
       // Under-counter fridges have a single door; tall ones a freezer door below.
       const fridge = appliance === "fridge" && h > 1200,
         lower = fridge ? Math.round(h * 0.36) : h;
@@ -335,6 +392,12 @@ export function buildScene(offer: Offer) {
         } else
           box(g, x + w / 2 - 64, y + h - 45, zFront + FRONT, 128, 12, 14, grip, item);
       }
+      return;
+    }
+    if (["reference020", "reference026", "reference066"].includes(item.kind)) {
+      // Pull-out with wire baskets: one front and a wire frame behind it.
+      panel(x, y, w, h - top, true, false, true);
+      if (gola) box(g, x, y + h - top, zFront, w, top, FRONT * 0.6, golaMat, item);
       return;
     }
     const drawers = item.drawers || 0,
@@ -397,6 +460,7 @@ export function buildScene(offer: Offer) {
         0,
       );
       wallMesh.receiveShadow = true;
+      wallMesh.userData.obstacle = true;
       g.add(wallMesh);
       for (const o of scene.objects) {
         const m =
@@ -412,9 +476,39 @@ export function buildScene(offer: Offer) {
           o.height,
           o.kind === "column" ? 300 : 8,
           m,
+          undefined,
+          true,
         );
       }
     }
+    /** Cut-outs for the sinks that stand under a worktop spanning x..x+w (mm, wall coordinates). */
+    const sinkOpenings = (x: number, z: number, w: number, d: number) =>
+      wall.entries
+        .filter(
+          (s) =>
+            s.entry.appliance === "sink" &&
+            !isSpacer(s.entry.item) &&
+            s.x >= x - 1 &&
+            s.x + s.width <= x + w + 1,
+        )
+        .sort((a, b) => a.x - b.x)
+        .map((s) => ({
+          x0: s.x + s.width * 0.15,
+          x1: s.x + s.width * 0.85,
+          // The tap stands behind the basin, against the wall.
+          z0: Math.max(s.y + 90, z + 90),
+          z1: Math.min(Math.max(s.y + 90, z + 90) + s.depth * 0.62, z + d - 60),
+          item: s.entry.item as LayoutItem,
+        }))
+        .filter((o) => o.x1 - o.x0 > 200 && o.z1 - o.z0 > 200);
+    const hasTop = (t: (typeof wall.entries)[number]) =>
+      wall.entries.some(
+        (o) =>
+          o.entry.item.kind === "worktop" &&
+          t.x >= o.x - 1 &&
+          t.x + t.width <= o.x + o.width + 1 &&
+          sinkOpenings(o.x, o.y, o.width, o.depth).some((h) => h.item === t.entry.item),
+      );
     for (const t of wall.entries) {
       const e = t.entry;
       if (isSpacer(e.item)) continue;
@@ -428,17 +522,48 @@ export function buildScene(offer: Offer) {
         y = e.rect.y,
         h = e.rect.height;
       if (item.kind === "worktop") {
-        box(
-          g,
-          x,
-          y,
-          z,
-          w,
-          h,
-          d,
-          mat(color(e.finish?.worktop.color, "#cfc6b6"), { roughness: 0.5 }),
-          item,
-        );
+        const top = mat(color(e.finish?.worktop.color, "#cfc6b6"), { roughness: 0.5 });
+        const holes = sinkOpenings(x, z, w, d);
+        if (!holes.length) box(g, x, y, z, w, h, d, top, item);
+        else {
+          // The worktop is cut around each sink; a steel basin goes down into the cabinet.
+          let cursor = x;
+          for (const o of holes) {
+            box(g, cursor, y, z, o.x0 - cursor, h, d, top, item);
+            box(g, o.x0, y, z, o.x1 - o.x0, h, o.z0 - z, top, item);
+            box(g, o.x0, y, o.z1, o.x1 - o.x0, h, z + d - o.z1, top, item);
+            cursor = o.x1;
+            const deep = 190,
+              wallT = 6;
+            box(g, o.x0, y + h - deep, o.z0, o.x1 - o.x0, wallT, o.z1 - o.z0, steelMat, o.item);
+            box(g, o.x0, y + h - deep, o.z0, wallT, deep, o.z1 - o.z0, steelMat, o.item);
+            box(g, o.x1 - wallT, y + h - deep, o.z0, wallT, deep, o.z1 - o.z0, steelMat, o.item);
+            box(g, o.x0, y + h - deep, o.z0, o.x1 - o.x0, deep, wallT, steelMat, o.item);
+            box(g, o.x0, y + h - deep, o.z1 - wallT, o.x1 - o.x0, deep, wallT, steelMat, o.item);
+            // Rim, drain and the tap behind the basin.
+            const rim = 14;
+            box(g, o.x0 - 2, y + h, o.z0 - 2, o.x1 - o.x0 + 4, 3, rim, steelMat, o.item);
+            box(g, o.x0 - 2, y + h, o.z1 - rim + 2, o.x1 - o.x0 + 4, 3, rim, steelMat, o.item);
+            box(g, o.x0 - 2, y + h, o.z0 - 2, rim, 3, o.z1 - o.z0 + 4, steelMat, o.item);
+            box(g, o.x1 - rim + 2, y + h, o.z0 - 2, rim, 3, o.z1 - o.z0 + 4, steelMat, o.item);
+            box(g, (o.x0 + o.x1) / 2 - 22, y + h - deep + wallT, (o.z0 + o.z1) / 2 - 22, 44, 2, 44, dark, o.item);
+            const cx = (o.x0 + o.x1) / 2,
+              tz = o.z0 - 45;
+            const post = new THREE.Mesh(new THREE.CylinderGeometry(15 * MM, 17 * MM, 260 * MM, 20), steelMat);
+            post.position.set(cx * MM, (y + h + 130) * MM, tz * MM);
+            const spout = new THREE.Mesh(new THREE.CylinderGeometry(10 * MM, 10 * MM, 190 * MM, 16), steelMat);
+            spout.rotation.x = Math.PI / 2;
+            spout.position.set(cx * MM, (y + h + 255) * MM, (tz + 95) * MM);
+            const tip = new THREE.Mesh(new THREE.CylinderGeometry(10 * MM, 10 * MM, 55 * MM, 16), steelMat);
+            tip.position.set(cx * MM, (y + h + 230) * MM, (tz + 190) * MM);
+            for (const part of [post, spout, tip]) {
+              part.userData.item = o.item;
+              part.castShadow = true;
+              g.add(part);
+            }
+          }
+          box(g, cursor, y, z, x + w - cursor, h, d, top, item);
+        }
         continue;
       }
       if (["plinth", "side", "panel", "filler"].includes(item.kind)) {
@@ -499,7 +624,11 @@ export function buildScene(offer: Offer) {
         box(g2, x, y, z, T, h, depth, m, item);
         box(g2, x + w - T, y, z, T, h, depth, m, item);
         box(g2, x + T, y, z, w - 2 * T, T, depth, m, item);
-        box(g2, x + T, y + h - T, z, w - 2 * T, T, depth, m, item);
+        if (e.appliance === "sink") {
+          // Open above the basin: only a front and a back rail carry the worktop.
+          box(g2, x + T, y + h - T, z, w - 2 * T, T, 70, m, item);
+          box(g2, x + T, y + h - T, z + depth - 70, w - 2 * T, T, 70, m, item);
+        } else box(g2, x + T, y + h - T, z, w - 2 * T, T, depth, m, item);
         box(g2, x + T, y + T, z, w - 2 * T, h - 2 * T, 8, m, item);
         if ((item.doors || 0) > 0 && !(item.drawers || 0)) {
           const shelves = h > 1500 ? 3 : h > 650 ? 1 : 0;
@@ -545,8 +674,10 @@ export function buildScene(offer: Offer) {
           mat(new THREE.Color(applianceStyle(e.applianceColor).body), { roughness: 0.4, metalness: 0.3 }),
           item,
         );
-      if (e.appliance === "sink")
-        box(g2, x + w * 0.15, e.counterTop, z + 60, w * 0.7, 6, d * 0.7, dark, item);
+      if (e.appliance === "sink") {
+        if (!hasTop(t))
+          box(g2, x + w * 0.15, e.counterTop, z + 60, w * 0.7, 6, d * 0.7, dark, item);
+      }
       else if (e.hob || e.cooktop || e.appliance === "hob") {
         // Glass-ceramic hob: glossy black plate with four cooking zones.
         const plate = mat(new THREE.Color("#14171a"), {
@@ -655,7 +786,9 @@ export default function Kitchen3DViewport({
   onFullscreen,
   onCloseFullscreen,
   onSelect,
+  toolbarExtra,
 }: {
+  toolbarExtra?: ReactNode;
   offer: Offer;
   fullscreen?: boolean;
   onFullscreen?: () => void;
@@ -827,12 +960,13 @@ export default function Kitchen3DViewport({
           </button>
         )}
         <button className="text-btn" onClick={() => api.current?.fit()}>
-          <Scan size={18} /> Uklopi
+          <LocateFixed size={18} /> Uklopi
         </button>
         <button className="text-btn" onClick={() => api.current?.toggleAll()}>
           {opened ? <DoorClosed size={18} /> : <DoorOpen size={18} />}{" "}
           {opened ? "Zatvori sve" : "Otvori sve"}
         </button>
+        {!fullscreen && toolbarExtra}
         {!fullscreen && onFullscreen && (
           <button
             className="icon-btn"

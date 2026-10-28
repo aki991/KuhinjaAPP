@@ -186,7 +186,7 @@ export default function ElementSVG({
         />
       </>
     );
-  else if (item && reference && !reference.constructionKind)
+  else if (item && reference && !reference.constructionKind && !hoodDrop(item))
     content = (
       <ReferenceArtwork
         applianceColor={e.applianceColor}
@@ -340,7 +340,8 @@ export default function ElementSVG({
       oven = e.appliance === "oven",
       // A built-in oven cabinet: the 600 mm oven on top, a drawer under it.
       ovenDrawer = oven && !tall && item!.kind === "oven",
-      count = oven && !tall ? 0 : Math.max(0, item!.doors),
+      // The hood cabinet is drawn like a wall cabinet with one door, with the hood body below it.
+      count = oven && !tall ? 0 : Math.max(hoodDrop(item!) > 0 ? 1 : 0, item!.doors),
       openingH = ovenDrawer
         ? 600 * (h / item!.height)
         : oven
@@ -520,6 +521,27 @@ export default function ElementSVG({
       )}
       <g transform={`translate(${r.x} ${r.y})`}>
         {content}
+        {drop > 0 && (
+          <g data-appliance="hood" className="appliance-lines" style={{ stroke: hoodStyle.line, color: hoodStyle.detail }}>
+            <rect
+              x={1}
+              y={h}
+              width={Math.max(1, w - 2)}
+              height={drop * (h / e.rect.height)}
+              fill={hoodStyle.body}
+              strokeWidth={0.8}
+            />
+            {Array.from({ length: 8 }, (_, i) => (
+              <path
+                key={i}
+                d={`M${(w * (i + 1)) / 9} ${h + drop * (h / e.rect.height) * 0.25}v${drop * (h / e.rect.height) * 0.5}`}
+                stroke={hoodStyle.detail}
+                strokeWidth={1.2}
+                opacity={0.7}
+              />
+            ))}
+          </g>
+        )}
         {item && specialLabel[item.kind] && (
           <g className="technical-special" pointerEvents="none">
             {["corner", "cornerBlind", "wallCorner"].includes(item.kind) && (

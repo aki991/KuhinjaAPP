@@ -24,7 +24,7 @@ import {
 } from "../core/opening";
 import { pushSelection } from "../core/opening-kits";
 import { golaPalette, productAppearance } from "../core/appearance";
-import { isWhiteGood, typeAppliance } from "../core/elevation";
+import { hoodDrop, isWhiteGood, typeAppliance } from "../core/elevation";
 import PushSystemDialog from "./PushSystemDialog";
 import VerticalGolaSelect from "./VerticalGolaSelect";
 import { Field, Modal } from "./UI";
@@ -112,7 +112,7 @@ export default function ElementEditor({
   );
   const t = templates.find((t) => t.kind === element.kind)!;
   const description = referenceDescriptions[element.kind] ?? t.rule;
-  const canChangeHinge = value.doors === 1 && !["lift", "liftDouble", "liftFolding"].includes(value.kind) && !["fridge", "dishwasher", "oven"].includes(value.visual?.appliance || "");
+  const canChangeHinge = (value.doors === 1 || hoodDrop(value) > 0) && !["lift", "liftDouble", "liftFolding"].includes(value.kind) && !["fridge", "dishwasher", "oven"].includes(value.visual?.appliance || "");
   const numeric = (
     key:
       | "width"

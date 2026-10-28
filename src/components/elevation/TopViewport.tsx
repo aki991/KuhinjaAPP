@@ -1,5 +1,5 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { Maximize, X, Scan } from "lucide-react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { LocateFixed, Maximize, Minus, Plus, X } from "lucide-react";
 import type { ElevationScene } from "../../core/elevation";
 import type { KitchenWall, LayoutItem, Offer } from "../../core/types";
 import { isSpacer } from "../../core/layout";
@@ -17,6 +17,7 @@ export default function TopViewport({
   walls,
   onChooseWall,
   onEditWall,
+  toolbarExtra,
 }: {
   offer: Offer;
   scene: ElevationScene;
@@ -29,6 +30,7 @@ export default function TopViewport({
   walls: KitchenWall[];
   onChooseWall: (id: string) => void;
   onEditWall: (id: string) => void;
+  toolbarExtra?: ReactNode;
 }) {
   const root = useRef<HTMLDivElement>(null),
     scroll = useRef<HTMLDivElement>(null),
@@ -131,8 +133,22 @@ export default function TopViewport({
               <X size={20} />
             </button>
           )}
+          <button
+            className="icon-btn zoom-btn"
+            aria-label="Umanji pogled odozgo"
+            onClick={() => setZoom((z) => Math.max(0.25, z / 1.3))}
+          >
+            <Minus size={20} />
+          </button>
+          <button
+            className="icon-btn zoom-btn"
+            aria-label="Uvećaj pogled odozgo"
+            onClick={() => setZoom((z) => Math.min(6, z * 1.3))}
+          >
+            <Plus size={20} />
+          </button>
           <button className="text-btn" onClick={() => setZoom(1)}>
-            <Scan size={18} />
+            <LocateFixed size={18} />
             Uklopi
           </button>
         </div>
@@ -143,6 +159,7 @@ export default function TopViewport({
         >
           Kote
         </button>
+        {!fullscreen && toolbarExtra}
         {fullscreen && (
           <button className="text-btn" onClick={onFront}>
             Spreda

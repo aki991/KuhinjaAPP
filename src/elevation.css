@@ -283,3 +283,6 @@ button[aria-label^="Obriši"],
   background: #c62828 !important;
   border-color: #c62828 !important;
 }
+.technical-free path { stroke: #8b979f; stroke-width: 0.8; stroke-dasharray: 4 3; fill: none; }
+.technical-free .technical-free-label { fill: #fff; stroke: none; }
+.technical-free text { font-size: 11px; fill: #5a6a74; stroke: none; }

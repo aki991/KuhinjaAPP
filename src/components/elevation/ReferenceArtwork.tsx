@@ -46,6 +46,9 @@ export default function ReferenceArtwork({
 }) {
   const root = artwork.get(kind);
   if (!root) return null;
+  const view = root.attrs.viewBox.split(" ").map(Number);
+  // Below this line lies the hood body of a telescopic hood cabinet (the cabinet itself ends here).
+  const hoodTop = view[3] + 2 * view[1];
   const draw = (node: Node, key: string): ReactNode => {
     if (!tags.has(node.tag)) return null;
     const attrs = Object.fromEntries(
@@ -56,7 +59,8 @@ export default function ReferenceArtwork({
     );
     const w = Number(node.attrs.width),
       h = Number(node.attrs.height);
-    if (applianceColor) {
+    const onHood = Number(node.attrs.y ?? node.attrs.y1 ?? 0) >= hoodTop - 0.5;
+    if (applianceColor && (!hood || onHood)) {
       // White goods: recolour the steel body, its lines and its handles.
       const st = applianceStyle(applianceColor);
       if (attrs.fill?.toLowerCase() === "#e4e6e3") attrs.fill = st.body;
@@ -74,7 +78,7 @@ export default function ReferenceArtwork({
     if (handle && !handles) return null;
     if (handle) {
       attrs.className = "reference-handle";
-      if (applianceColor)
+      if (applianceColor && (!hood || onHood))
         attrs.style = { fill: applianceStyle(applianceColor).detail } as never;
     }
     else if (node.attrs.fill === "#f3e5c8") attrs.className = "reference-front";

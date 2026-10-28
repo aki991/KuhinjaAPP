@@ -1,5 +1,5 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { Scan, Maximize, X } from "lucide-react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { LocateFixed, Maximize, Minus, Plus, X } from "lucide-react";
 import {
   elevationCamera,
   containedElevationCamera,
@@ -28,6 +28,7 @@ export default function ElevationViewport({
   onTopView,
   onObject,
   onEditWall,
+  toolbarExtra,
 }: {
   scene: ElevationScene;
   scale: number;
@@ -44,6 +45,7 @@ export default function ElevationViewport({
   onTopView?: () => void;
   onObject?: (id: string) => void;
   onEditWall?: (id: string) => void;
+  toolbarExtra?: ReactNode;
 }) {
   const frame = useRef<HTMLDivElement>(null),
     anchor = useRef<{ x: number; y: number; px?: number; py?: number } | null>(
@@ -275,6 +277,26 @@ export default function ElevationViewport({
       node.removeEventListener("touchcancel", end);
     };
   }, []);
+  function zoomBy(factor: number) {
+    const node = frame.current;
+    if (node)
+      anchor.current = {
+        x: (node.scrollLeft + box.width / 2 - margin.left) / actual,
+        y:
+          scene.height -
+          (node.scrollTop + camera.viewportHeight / 2 - margin.top) / actual,
+      };
+    setFitAll(false);
+    setZoom((z) =>
+      Math.max(
+        0.02,
+        Math.min(
+          0.65 / normalCamera.fitted,
+          (fitAll ? actual / normalCamera.fitted : z) * factor,
+        ),
+      ),
+    );
+  }
   const floor = margin.top + scene.height * actual,
     baseTop = margin.top + (scene.height - scene.baseTop) * actual,
     wallBottom = margin.top + (scene.height - scene.upperBottom) * actual;
@@ -297,6 +319,22 @@ export default function ElevationViewport({
             </button>
           )}
           <button
+            className="icon-btn zoom-btn"
+            aria-label="Umanji 2D prikaz"
+            disabled={actual <= normalCamera.fitted * 0.02}
+            onClick={() => zoomBy(1 / 1.3)}
+          >
+            <Minus size={20} />
+          </button>
+          <button
+            className="icon-btn zoom-btn"
+            aria-label="Uvećaj 2D prikaz"
+            disabled={actual >= 0.65}
+            onClick={() => zoomBy(1.3)}
+          >
+            <Plus size={20} />
+          </button>
+          <button
             className="text-btn"
             onClick={() => {
               anchor.current = null;
@@ -305,7 +343,7 @@ export default function ElevationViewport({
               setFitRequest((n) => n + 1);
             }}
           >
-            <Scan size={18} /> Uklopi
+            <LocateFixed size={18} /> Uklopi
           </button>
         </div>
         <button
@@ -316,6 +354,7 @@ export default function ElevationViewport({
         >
           Kote
         </button>
+        {!fullscreen && toolbarExtra}
         {fullscreen ? (
           walls.length > 1 && (
             <select

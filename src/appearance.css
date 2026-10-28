@@ -421,3 +421,15 @@
 .tile-choice span:last-child {
   font-size: 0.9rem;
 }
+
+/* Zoom buttons only where there is room for them. */
+.elevation-toolbar .zoom-btn { display: none; }
+@media (min-width: 421px) {
+  .elevation-toolbar .zoom-btn { display: inline-flex; align-items: center; justify-content: center; }
+}
+/* Compact wall and view buttons: three walls plus both view buttons fit in 360 px. */
+.wall-tabs { gap: 4px; margin-bottom: 8px; }
+.wall-tabs > button { min-height: 36px; padding: 5px 9px; font-size: 14px; }
+.wall-tabs > .add-wall { height: 36px; min-width: 36px; padding: 5px; }
+.kitchen-view-modes { gap: 4px; }
+.kitchen-view-modes button { min-height: 36px; padding: 5px 9px; font-size: 14px; }

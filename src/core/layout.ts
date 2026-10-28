@@ -235,7 +235,7 @@ export function newSpacer(
  * Wall lengths a lane cannot use: tall cabinets block the upper row, and wall objects
  * (windows, doors, columns, niches) block every row whose height band they cross.
  */
-function blockedSpans(
+export function blockedSpans(
   items: LayoutItem[],
   wall: string,
   row: "base" | "wall",

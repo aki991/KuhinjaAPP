@@ -424,6 +424,7 @@ export default function App() {
               onChange={changeOffer}
               onSave={save}
               onPrice={() => go("cost")}
+              products={products}
             />
           )}
           {page === "cost" && offer && (

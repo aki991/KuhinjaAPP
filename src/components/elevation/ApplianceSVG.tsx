@@ -176,22 +176,17 @@ export function SinkSVG({
   y: number;
   width: number;
 }) {
-  const basin = width * 0.53;
+  // Seen from the front only the tap shows, in the middle of the sink.
+  const stem = x + width * 0.56,
+    spout = width * 0.24;
   return (
     <g data-appliance="sink" className="appliance-lines">
       <path
-        d={`M${x + width * 0.12} ${y}H${x + width * 0.88}M${x + (width - basin) / 2} ${y}q0 ${width * 0.17} ${basin / 2} ${width * 0.17}q${basin / 2} 0 ${basin / 2} ${-width * 0.17}`}
-        fill="#edf2f2"
-      />
-      <path
-        d={`M${x + width * 0.61} ${y}v${-width * 0.18}q0 ${-width * 0.13} ${-width * 0.12} ${-width * 0.13}q${-width * 0.12} 0 ${-width * 0.12} ${width * 0.13}`}
+        d={`M${stem} ${y}v${-width * 0.18}q0 ${-width * 0.13} ${-width * 0.12} ${-width * 0.13}q${-width * 0.12} 0 ${-width * 0.12} ${width * 0.13}`}
         fill="none"
         strokeWidth="1.5"
       />
-      <path
-        d={`M${x + width * 0.56} ${y - 2}h${width * 0.1}`}
-        strokeWidth="2"
-      />
+      <path d={`M${stem - spout / 2 - width * 0.05} ${y - 2}h${width * 0.1}`} strokeWidth="2" />
     </g>
   );
 }

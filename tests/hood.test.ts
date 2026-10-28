@@ -40,3 +40,41 @@ describe("Most", () => {
     expect(make(700)).toBe(make(400));
   });
 });
+
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import ReferenceArtwork from "../src/components/elevation/ReferenceArtwork";
+
+it("korpus aspiratora ima boje običnog elementa, samo telo aspiratora ima boju bele tehnike", () => {
+  const html = renderToStaticMarkup(
+    createElement(ReferenceArtwork, {
+      kind: "reference038",
+      width: 100,
+      height: 100,
+      handles: true,
+      mirror: false,
+      hood: true,
+      applianceColor: "black",
+    }),
+  );
+  // okvir korpusa ostaje sivi, a traka aspiratora je crna
+  expect(html).toContain('stroke="#686d65"');
+  expect(html).not.toContain("E4E6E3");
+});
+
+import WallElevation from "../src/components/elevation/WallElevation";
+
+it("slobodna mera do kraja zida se smanjuje za širinu postavljenog elementa", () => {
+  const free = (count: number) => {
+    const o = createOffer();
+    o.layout = { walls: [{ id: "A", name: "Zid A", length: 3200 }], activeWall: "A", version: 3, spacers: [] };
+    o.elements = Array.from({ length: count }, () => newElement("base1"));
+    const scene = elevationScene(ensureLayout(o), "A");
+    const html = renderToStaticMarkup(
+      createElement(WallElevation, { scene, scale: 0.1, selected: null }),
+    );
+    return [...html.matchAll(/data-free-length="(\d+)"/g)].map((m) => Number(m[1]));
+  };
+  expect(free(1)).toEqual([2600]);
+  expect(free(2)).toEqual([2000]);
+});

@@ -34,16 +34,16 @@ describe("proširena biblioteka", () => {
       "Ostrvski",
       "Dodaci",
     ]);
-    expect(libraryTemplates.length + 1).toBe(145); // Razmak je posebna stavka rasporeda.
-    expect(new Set(libraryTemplates.map((t) => t.kind)).size).toBe(144);
+    expect(libraryTemplates.length + 1).toBe(143); // Razmak je posebna stavka rasporeda.
+    expect(new Set(libraryTemplates.map((t) => t.kind)).size).toBe(142);
     expect(
       libraryTemplates.filter((t) => t.kind.startsWith("reference")),
     ).toHaveLength(92);
     expect(libraryTemplates.filter((t) => t.group === "Donji")).toHaveLength(
-      44,
+      43,
     );
     expect(libraryTemplates.filter((t) => t.group === "Viseći")).toHaveLength(
-      34,
+      33,
     );
     expect(libraryTemplates.filter((t) => t.group === "Most")).toHaveLength(
       10,

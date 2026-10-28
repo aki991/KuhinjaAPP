@@ -10,6 +10,9 @@ import {
   MoreHorizontal,
   Ruler,
   Settings2,
+  Sparkles,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import {
   isFreestanding,
@@ -61,13 +64,16 @@ import WallSettingsEditor, {
 import { Cabinet, Field, Modal, ModalPortalContext, number } from "./UI";
 import ElementEditor from "./ElementEditor";
 import SpacerEditor from "./SpacerEditor";
+import PresetPicker from "./PresetPicker";
 import useLayoutDrag from "./useLayoutDrag";
 export default function KitchenView({
   offer,
   onChange,
   onSave,
   onPrice,
+  products = [],
 }: {
+  products?: Product[];
   offer: Offer;
   onChange: (o: Offer) => void;
   onSave: () => Promise<void>;
@@ -79,6 +85,8 @@ export default function KitchenView({
     [editor, setEditor] = useState<LayoutItem | null>(null),
     [selected, setSelected] = useState<string | null>(null),
     [wallModal, setWallModal] = useState(false),
+    [presetModal, setPresetModal] = useState(false),
+    [clearModal, setClearModal] = useState(false),
     [wallEditId, setWallEditId] = useState("A"),
     [wallLength, setWallLength] = useState(3000),
     [projectModal, setProjectModal] = useState(false),
@@ -287,6 +295,108 @@ export default function KitchenView({
     saveItem(item);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
+  // Undo / redo of the kitchen itself: elements, layout, materials and wall settings.
+  type Snapshot = Pick<Offer, "elements" | "layout" | "selection" | "elevation">;
+  const snap = (o: Offer): Snapshot => ({
+    elements: o.elements,
+    layout: o.layout,
+    selection: o.selection,
+    elevation: o.elevation,
+  });
+  const history = useRef({
+    past: [] as Snapshot[],
+    future: [] as Snapshot[],
+    prev: snap(offer),
+    skip: false,
+  });
+  const [, setHistoryTick] = useState(0);
+  useEffect(() => {
+    const h = history.current,
+      now = snap(offer);
+    if (
+      h.prev.elements === now.elements &&
+      h.prev.layout === now.layout &&
+      h.prev.selection === now.selection &&
+      h.prev.elevation === now.elevation
+    )
+      return;
+    if (h.skip) h.skip = false;
+    else if (JSON.stringify(h.prev) === JSON.stringify(now)) {
+      // Saving or normalising rebuilds the objects without changing anything.
+      h.prev = now;
+      return;
+    } else {
+      h.past.push(h.prev);
+      if (h.past.length > 100) h.past.shift();
+      h.future = [];
+    }
+    h.prev = now;
+    setHistoryTick((n) => n + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offer.elements, offer.layout, offer.selection, offer.elevation]);
+  const travel = (direction: "undo" | "redo") => {
+    const h = history.current,
+      from = direction === "undo" ? h.past : h.future,
+      to = direction === "undo" ? h.future : h.past,
+      target = from.pop();
+    if (!target) return;
+    to.push(h.prev);
+    h.skip = true;
+    setSelected(null);
+    setEditor(null);
+    setDragNotice("");
+    onChange({ ...offer, ...target, updatedAt: new Date().toISOString() });
+    setHistoryTick((n) => n + 1);
+  };
+  const undo = () => travel("undo"),
+    redo = () => travel("redo");
+  const undoRef = useRef({ undo, redo });
+  undoRef.current = { undo, redo };
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable=true]"))
+        return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) undoRef.current.undo();
+      else if (k === "y" || (k === "z" && e.shiftKey)) undoRef.current.redo();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, []);
+  const toolbarButtons = (
+    <>
+      <button
+        className="icon-btn history-btn"
+        aria-label="Poništi poslednju izmenu"
+        title="Poništi (Ctrl+Z)"
+        disabled={!history.current.past.length}
+        onClick={undo}
+      >
+        <Undo2 size={19} />
+      </button>
+      <button
+        className="icon-btn history-btn"
+        aria-label="Vrati poništenu izmenu"
+        title="Vrati (Ctrl+Y)"
+        disabled={!history.current.future.length}
+        onClick={redo}
+      >
+        <Redo2 size={19} />
+      </button>
+      <button
+        className="text-btn clear-all"
+        aria-label="Obriši sve elemente"
+        disabled={!offer.elements.length}
+        onClick={() => setClearModal(true)}
+      >
+        <Trash2 size={17} /> Obriši sve
+      </button>
+    </>
+  );
   const scale = elevationScale;
   const scene = useMemo(() => elevationScene(offer, wall.id), [offer, wall.id]);
   const upperFree = freeUpperLength(scene, packed.elements, layout);
@@ -518,14 +628,23 @@ export default function KitchenView({
           <div
             className={`wall-measure ${usage.overrun ? "over-capacity" : ""}`}
           >
-            <button
-              className="wall-length"
-              aria-label="Okviri i mere"
-              onClick={() => setVisualSettings(true)}
-            >
-              <Settings2 size={20} />
-              <strong>Okviri i mere</strong>
-            </button>
+            <div className="wall-measure-left">
+              <button
+                className="wall-length"
+                aria-label="Okviri i mere"
+                onClick={() => setVisualSettings(true)}
+              >
+                <Settings2 size={20} />
+                <strong>Okviri i mere</strong>
+              </button>
+              <button
+                className="wall-length preset-open"
+                onClick={() => setPresetModal(true)}
+              >
+                <Sparkles size={20} />
+                <strong>Predlozi kuhinja</strong>
+              </button>
+            </div>
             <div className="wall-free-space">
               <span>Slobodno:</span>
               <span>
@@ -563,6 +682,7 @@ export default function KitchenView({
                 onFullscreen={() => void fullscreen.enter()}
                 onCloseFullscreen={() => void fullscreen.exit()}
                 onSelect={(item) => selectItem(item)}
+                toolbarExtra={toolbarButtons}
               />
             </Suspense>
           ) : view === "top" ? (
@@ -587,6 +707,7 @@ export default function KitchenView({
               walls={roomWalls}
               onChooseWall={chooseWall}
               onEditWall={editWallLength}
+              toolbarExtra={toolbarButtons}
             />
           ) : (
             <ElevationViewport
@@ -607,6 +728,7 @@ export default function KitchenView({
               onTopView={() => setView("top")}
               onObject={setObjectEditId}
               onEditWall={editWallLength}
+              toolbarExtra={toolbarButtons}
             />
           )}
           <ElementStrip
@@ -768,6 +890,65 @@ export default function KitchenView({
               onSave={saveItem}
             />
           ))}
+        {clearModal && (
+          <Modal title="Obrisati sve elemente?" onClose={() => setClearModal(false)}>
+            <p>
+              Iz kuhinje će biti uklonjeni svi elementi ({offer.elements.length}{" "}
+              kom). Prozori, vrata i mere zidova ostaju. Brisanje možete
+              poništiti dugmetom za poništavanje.
+            </p>
+            <div className="editor-save">
+              <button
+                className="btn secondary full"
+                onClick={() => setClearModal(false)}
+              >
+                Odustani
+              </button>
+              <button
+                className="btn danger full"
+                onClick={() => {
+                  change({
+                    elements: [],
+                    layout: {
+                      ...layout,
+                      spacers: [],
+                      walls: layout.walls.filter((w) => w.id !== "island"),
+                      activeWall:
+                        layout.activeWall === "island"
+                          ? layout.walls[0].id
+                          : layout.activeWall,
+                      islandPosition: undefined,
+                    },
+                  });
+                  setSelected(null);
+                  setEditor(null);
+                  setClearModal(false);
+                }}
+              >
+                Da, obriši sve
+              </button>
+            </div>
+          </Modal>
+        )}
+        {presetModal && (
+          <PresetPicker
+            offer={offer}
+            products={products}
+            onClose={() => setPresetModal(false)}
+            onApply={(next) => {
+              change({
+                elements: next.elements,
+                layout: next.layout,
+                selection: next.selection,
+                prices: next.prices,
+              });
+              setSelected(null);
+              setEditor(null);
+              setPresetModal(false);
+              setView("front");
+            }}
+          />
+        )}
         {visualSettings && (
           <WallSettingsEditor
             config={scene.config}

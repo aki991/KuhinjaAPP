@@ -7,6 +7,7 @@ import ElementSVG from "./ElementSVG";
 import { HeightDimension, WidthDimension, dimensionChains } from "./Dimensions";
 import { HobSVG, SinkSVG } from "./ApplianceSVG";
 import VisualAddition from "./VisualAdditions";
+import { number } from "../UI";
 
 export default function WallElevation({
   scene,
@@ -47,6 +48,27 @@ export default function WallElevation({
             screen(e.rect).y + screen(e.rect).height + e.frontOverhang * scale,
         ),
       );
+  /** Free length between the cabinets of a row and the ends of the wall; it shrinks as cabinets are added. */
+  const freeRuns: { x0: number; x1: number; y: number; value: number }[] = [];
+  for (const row of ["base", "wall"] as const) {
+    const items = scene.entries.filter(
+      (e) => e.row === row && !isSpacer(e.item),
+    );
+    if (!scene.entries.length || (row === "wall" && !items.length)) continue;
+    const reserved = scene.reserved?.[row] ?? { start: 0, end: 0 },
+      mid = row === "base" ? scene.baseTop / 2 : scene.upperBottom + 360,
+      y = margin.top + (scene.height - mid) * scale,
+      first = Math.min(...items.map((e) => e.rect.x)),
+      last = Math.max(...items.map((e) => e.rect.x + e.rect.width));
+    const spans: [number, number][] = items.length
+      ? [
+          [reserved.start, first],
+          [last, scene.length - reserved.end],
+        ]
+      : [[reserved.start, scene.length - reserved.end]];
+    for (const [a, b] of spans)
+      if (b - a >= 1) freeRuns.push({ x0: a, x1: b, y, value: Math.round(b - a) });
+  }
   const sorted = [...scene.entries].sort(
     (a, b) => Number(a.row !== "wall") - Number(b.row !== "wall"),
   );
@@ -235,6 +257,34 @@ export default function WallElevation({
           </g>
         );
       })}
+      <g className="technical-free" aria-hidden="true">
+        {freeRuns.map((run, i) => {
+          const x0 = margin.left + run.x0 * scale,
+            x1 = margin.left + run.x1 * scale,
+            label = number(run.value),
+            labelWidth = label.length * 6.5 + 8;
+          if (x1 - x0 < 6) return null;
+          return (
+            <g key={i} data-free-length={run.value}>
+              <path d={`M${x0} ${run.y - 5}v10M${x1} ${run.y - 5}v10M${x0} ${run.y}H${x1}`} />
+              {x1 - x0 >= labelWidth + 6 && (
+                <>
+                  <rect
+                    x={(x0 + x1) / 2 - labelWidth / 2}
+                    y={run.y - 8}
+                    width={labelWidth}
+                    height={16}
+                    className="technical-free-label"
+                  />
+                  <text x={(x0 + x1) / 2} y={run.y + 4} textAnchor="middle">
+                    {label}
+                  </text>
+                </>
+              )}
+            </g>
+          );
+        })}
+      </g>
       <g
         data-dimension-chain="total"
         className={onEditLength ? "elevation-length-edit" : undefined}
