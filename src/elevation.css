@@ -289,3 +289,9 @@ button[aria-label^="Obriši"],
 
 .technical-occupied rect { fill: #e9eaea; stroke: #b9bec1; stroke-width: 0.8; stroke-dasharray: 4 3; }
 .technical-occupied text { fill: #6c777d; stroke: none; font-weight: 600; }
+
+/* Doors inside catalogue artwork keep the same thin lines as the other drawings. */
+[data-reference-art] .front-frame,
+[data-reference-art] .front-inset,
+[data-reference-art] .door-opening,
+[data-reference-art] .technical-handle { vector-effect: non-scaling-stroke; }

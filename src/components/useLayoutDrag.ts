@@ -4,10 +4,14 @@ import {
   allLayoutItems,
   canPlace,
   orderedLane,
+  placeAt,
   span,
   relocateItem,
   wallUsage,
 } from "../core/layout";
+
+/** Elements are placed on a 5 cm grid. */
+const GRID = 50;
 export interface DropTarget {
   wall: string;
   row: LayoutLane;
@@ -15,6 +19,8 @@ export interface DropTarget {
   offset: number;
   compatible: boolean;
   overrun: number;
+  /** Free position (mm from the wall start) when the element lands in an empty place. */
+  free?: number;
 }
 export interface DragView {
   id: string;
@@ -32,6 +38,8 @@ interface Candidate {
   touch: boolean;
   width: number;
   height: number;
+  /** Where inside the grabbed card the pointer is (px), so the drop keeps the card under the finger. */
+  grab: number;
 }
 export default function useLayoutDrag({
   root,
@@ -112,6 +120,40 @@ export default function useLayoutDrag({
           (e) => e.id !== source.id,
         ),
         at = Math.max(0, (x - row.getBoundingClientRect().left) / scale);
+      // Free placement on the 5 cm grid, when the wanted place is empty (or only slightly occupied).
+      const want =
+        Math.round(
+          ((x - row.getBoundingClientRect().left - pending.grab) / scale) / GRID,
+        ) * GRID;
+      const free = placeAt(
+        offer.elements,
+        offer.layout!,
+        source.id,
+        wall,
+        lane,
+        want,
+        offer.elevation,
+      );
+      if (!("error" in free)) {
+        const items = allLayoutItems(free.elements, free.layout),
+          wallLength =
+            free.layout.walls.find((w) => w.id === wall)?.length || 0,
+          usage = wallUsage(
+            free.elements,
+            free.layout.walls.find((w) => w.id === wall)!,
+            free.layout,
+          ),
+          placed = items.find((e) => e.id === source.id)!;
+        return {
+          wall,
+          row: lane,
+          index: placed.placement?.order ?? 0,
+          offset: free.offset,
+          compatible: true,
+          overrun: Math.max(0, Math.max(usage.base, usage.upper) - wallLength),
+          free: want,
+        };
+      }
       let offset = 0,
         index = 0;
       for (const item of list) {
@@ -232,6 +274,7 @@ export default function useLayoutDrag({
         touch,
         width: rect.width,
         height: rect.height,
+        grab: x - rect.left,
       };
       if (touch) timer = setTimeout(activate, 450);
     };

@@ -250,6 +250,32 @@ export default function TopViewport({
                   strokeWidth={5}
                   strokeDasharray={wall.island ? "7 3" : undefined}
                 />
+                {!wall.island && (
+                  // A click on the wall opens its front view.
+                  <path
+                    className="plan-wall-open"
+                    data-open-wall={wall.scene.wall}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Prikaži ${wall.name} spreda`}
+                    d={`M0 0H${wall.scene.length * scale}`}
+                    stroke="transparent"
+                    strokeWidth={26}
+                    fill="none"
+                    style={{ cursor: "pointer", pointerEvents: "stroke" }}
+                    onClick={() => {
+                      onChooseWall(wall.scene.wall);
+                      onFront();
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onChooseWall(wall.scene.wall);
+                        onFront();
+                      }
+                    }}
+                  />
+                )}
                 <g
                   className="plan-wall-label"
                   role={wall.island ? undefined : "button"}

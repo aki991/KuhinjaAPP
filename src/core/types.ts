@@ -204,6 +204,10 @@ export interface Placement {
   offset: number;
   order?: number;
   row?: LayoutLane;
+  /** Empty length in front of this item (mm), so a deleted or moved cabinet leaves its place free. */
+  gap?: number;
+  /** Editor only: wanted distance from the start of the wall; applied when the element is saved. */
+  at?: number;
 }
 export interface LayoutSpacer {
   id: string;

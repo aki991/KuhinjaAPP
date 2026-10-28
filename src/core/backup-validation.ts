@@ -172,6 +172,8 @@ function validPlacement(p: Placement) {
     str(p.wall) &&
     finite(p.offset) &&
     p.offset >= 0 &&
+    (p.gap === undefined || (finite(p.gap) && p.gap >= 0)) &&
+    (p.at === undefined || finite(p.at)) &&
     (p.order === undefined || (Number.isInteger(p.order) && p.order >= 0)) &&
     (p.row === undefined || ["base", "wall", "extra"].includes(p.row))
   );

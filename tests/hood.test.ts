@@ -114,3 +114,64 @@ it("deo zida koji zauzima ugaoni element susednog zida je sivo polje sa imenom t
   expect(html).toContain('data-occupied-by="Zid A"');
   expect(html).toContain(">Zid A<");
 });
+
+it("prazno mesto posle obrisanog elementa ima svoju meru u prikazu spreda", async () => {
+  const { removeItem, packLayout } = await import("../src/core/layout");
+  const o = createOffer();
+  o.layout = { walls: [{ id: "A", name: "Zid A", length: 3000 }], activeWall: "A", version: 3, spacers: [] };
+  o.elements = [newElement("base1"), newElement("base1"), newElement("base1")];
+  const ready = ensureLayout(o),
+    packed = packLayout(ready.elements, ready.layout!);
+  const after = removeItem(packed.elements, packed.layout, packed.elements[1].id)!;
+  const scene = elevationScene({ ...o, elements: after.elements, layout: after.layout }, "A");
+  const html = renderToStaticMarkup(createElement(WallElevation, { scene, scale: 0.1, selected: null }));
+  const free = [...html.matchAll(/data-free-length="([0-9]+)"/g)].map((m) => Number(m[1]));
+  // rupa od 600 usred reda i 1200 do kraja zida
+  expect(free.sort((a, b) => a - b)).toEqual([600, 1200]);
+});
+
+it("ugaoni element ima iste boje okvira i linija kao ostali frontovi", () => {
+  for (const kind of ["reference014", "reference035", "reference001"]) {
+    const html = renderToStaticMarkup(
+      createElement(ReferenceArtwork, { kind, width: 100, height: 100, handles: true, mirror: false }),
+    );
+    expect(html, kind).toContain("#a69472");
+    expect(html, kind).not.toContain("#686d65");
+  }
+});
+
+it("vrata elemenata iz kataloga crtaju se istom komponentom kao ostala vrata", () => {
+  const html = (kind: string, handles = true) =>
+    renderToStaticMarkup(
+      createElement(ReferenceArtwork, { kind, width: 100, height: 100, handles, mirror: false }),
+    );
+  for (const kind of ["reference014", "reference035", "reference001"]) {
+    const out = html(kind);
+    expect(out, kind).toContain('data-front="door"');
+    expect(out, kind).toContain("front-frame");
+    expect(out, kind).toContain("front-inset");
+    expect(out, kind).toContain("door-opening");
+    expect(out, kind).toContain("technical-handle");
+    // stara crtež-ručka i isprekidana linija iz kataloga se ne crtaju
+    expect(out, kind).not.toContain("reference-handle");
+    expect(out, kind).not.toContain("24 16");
+    expect(html(kind, false), kind).not.toContain("technical-handle");
+  }
+});
+
+import catalogRecords from "../src/core/reference-catalog";
+
+it("svi elementi iz kataloga se crtaju bez greške, a vrata i fioke istim dizajnom", () => {
+  let door = 0,
+    drawer = 0;
+  for (const record of catalogRecords) {
+    const out = renderToStaticMarkup(
+      createElement(ReferenceArtwork, { kind: record.kind, width: 100, height: 100, handles: true, mirror: false }),
+    );
+    expect(out.length, record.kind).toBeGreaterThan(50);
+    if (out.includes('data-front="door"')) door++;
+    if (out.includes('data-front="drawer"')) drawer++;
+  }
+  expect(door).toBeGreaterThan(20);
+  expect(drawer).toBeGreaterThan(5);
+});

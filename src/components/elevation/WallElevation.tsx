@@ -71,9 +71,17 @@ export default function WallElevation({
       y = margin.top + (scene.height - mid) * scale,
       first = Math.min(...items.map((e) => e.rect.x)),
       last = Math.max(...items.map((e) => e.rect.x + e.rect.width));
+    // Also the empty places between cabinets (a deleted cabinet leaves its place free).
+    const ordered = [...items].sort((p, q) => p.rect.x - q.rect.x),
+      between: [number, number][] = [];
+    for (let i = 1; i < ordered.length; i++) {
+      const from = ordered[i - 1].rect.x + ordered[i - 1].rect.width;
+      if (ordered[i].rect.x - from >= 1) between.push([from, ordered[i].rect.x]);
+    }
     const spans: [number, number][] = items.length
       ? [
           [reserved.start, first],
+          ...between,
           [last, scene.length - reserved.end],
         ]
       : [[reserved.start, scene.length - reserved.end]];

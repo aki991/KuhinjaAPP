@@ -5,6 +5,7 @@ import { useId, type CSSProperties } from "react";
 import type { ElementKind } from "../../core/types";
 import { isFreestanding, templates } from "../../core/catalog";
 import ReferenceArtwork from "./ReferenceArtwork";
+import Door from "./Door";
 import { applianceStyle, golaHex } from "../../core/appearance";
 const specialLabel: Partial<Record<ElementKind, string>> = {
   baseCargo: "CARGO",
@@ -24,96 +25,6 @@ const specialLabel: Partial<Record<ElementKind, string>> = {
   wallBridgeOven: "MOST",
   islandBack: "OBLOGA",
 };
-function Door({
-  x,
-  y,
-  width: w,
-  height: h,
-  hinge = "left",
-  handles,
-  glass = false,
-  lift = false,
-  upper = false,
-  position = "vertical",
-}: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  hinge?: "left" | "right";
-  handles: boolean;
-  glass?: boolean;
-  lift?: boolean;
-  upper?: boolean;
-  position?: "vertical" | "horizontal" | "center";
-}) {
-  const inset = Math.min(4, w * 0.08, h * 0.08);
-  return (
-    <g data-front={glass ? "glass" : "door"}>
-      <rect
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        fill="#f3e5c8"
-        className="front-frame"
-      />
-      <rect
-        data-front-panel="door"
-        x={x + inset}
-        y={y + inset}
-        width={Math.max(0.1, w - 2 * inset)}
-        height={Math.max(0.1, h - 2 * inset)}
-        fill="#f8edd7"
-        className="front-inset"
-      />
-      {glass && (
-        <>
-          <rect
-            x={x + inset}
-            y={y + inset}
-            width={Math.max(0.1, w - 2 * inset)}
-            height={Math.max(0.1, h - 2 * inset)}
-            fill="#e1edf0"
-          />
-          <path
-            d={`M${x + inset * 2} ${y + h * 0.65}L${x + w * 0.5} ${y + inset * 2}`}
-            opacity=".3"
-          />
-        </>
-      )}
-      <path
-        className="door-opening"
-        data-opening-side={lift ? "up" : hinge}
-        d={
-          lift
-            ? `M${x} ${y + h}L${x + w / 2} ${y}L${x + w} ${y + h}`
-            : hinge === "left"
-              ? `M${x + w} ${y}L${x} ${y + h / 2}L${x + w} ${y + h}`
-              : `M${x} ${y}L${x + w} ${y + h / 2}L${x} ${y + h}`
-        }
-        fill="none"
-      />
-      {handles &&
-        (lift ? (
-          <path
-            className="technical-handle"
-            d={`M${x + w * 0.35} ${y + h - 5}h${w * 0.3}`}
-          />
-        ) : position !== "vertical" ? (
-          <path
-            className="technical-handle"
-            d={`M${position === "center" ? x + w * 0.35 : hinge === "left" ? x + w - Math.min(22, w * 0.3) - 4 : x + 4} ${upper ? y + h - inset - 4 : y + inset + 4}h${Math.min(22, w * 0.3)}`}
-          />
-        ) : (
-          <path
-            className="technical-handle"
-            d={`M${hinge === "left" ? x + w - Math.max(3, inset + 1) : x + Math.max(3, inset + 1)} ${upper ? y + h - Math.min(20, h * 0.23) - inset - 3 : y + inset + 3}v${Math.min(20, h * 0.23)}`}
-          />
-        ))}
-    </g>
-  );
-}
 export default function ElementSVG({
   entry: e,
   rect: r,
@@ -196,6 +107,8 @@ export default function ElementSVG({
         hood={drop > 0}
         freestanding={isFreestanding(item.kind)}
         handles={handles}
+        upper={e.row === "wall"}
+        position={e.handlePosition}
         mirror={item.doors === 1 && item.visual?.hinge === "right"}
       />
     );

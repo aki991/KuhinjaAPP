@@ -31,7 +31,9 @@ import {
   moveLayoutItem,
   newSpacer,
   packLayout,
+  placeAt,
   relocateItem,
+  removeItem as removeLayoutItem,
   isBridge,
   isSpacer,
   laneOf,
@@ -200,7 +202,7 @@ export default function KitchenView({
       : extra
         ? { ...layout, islandPosition: extra.islandPosition ?? undefined }
         : layout;
-    const result = relocateItem(
+    let result = relocateItem(
       nextElements,
       nextLayout,
       item.id,
@@ -209,6 +211,22 @@ export default function KitchenView({
       item.placement!.order ?? Number.MAX_SAFE_INTEGER,
       offer.elevation,
     );
+    // The distance from the wall typed in the editor: the element stands exactly there, the others stay.
+    const wantAt = isSpacer(item) ? undefined : item.placement?.at;
+    let notice = "";
+    if (result && wantAt !== undefined && item.placement!.wall !== "island") {
+      const placed = placeAt(
+        result.elements,
+        result.layout,
+        item.id,
+        item.placement!.wall,
+        laneOf(item),
+        wantAt,
+        offer.elevation,
+      );
+      if ("error" in placed) notice = `Položaj nije promenjen: ${placed.error}`;
+      else result = { elements: placed.elements, layout: placed.layout };
+    }
     // The first base cabinet on a wall brings one worktop for the whole run; it grows with the cabinets.
     let withTop = result?.elements;
     if (
@@ -245,7 +263,7 @@ export default function KitchenView({
       });
     setSelected(item.id);
     setFocusRequest((n) => n + 1);
-    setDragNotice("");
+    setDragNotice(notice);
     if (item.placement?.wall === "island") setView("top");
     else if (!offer.elements.some((e) => e.id === item.id) && !isSpacer(item)) {
       setView("front");
@@ -267,6 +285,15 @@ export default function KitchenView({
           }
         : layout;
     item.placement = appendPlacement(offer.elements, item, target, nextLayout);
+    if (!island) {
+      const probe = packLayout(
+        [...offer.elements, item],
+        nextLayout,
+        offer.elevation,
+      ).elements.find((e) => e.id === item.id);
+      if (probe?.placement)
+        item.placement = { ...item.placement, offset: probe.placement.offset };
+    }
     if (immediate) {
       const result = relocateItem(
         [...offer.elements, item],
@@ -411,15 +438,30 @@ export default function KitchenView({
     onFinish: () => setPreviewWall(null),
     onInvalid: setDragNotice,
     onDrop: (id, target) => {
-      const result = relocateItem(
-        offer.elements,
-        layout,
-        id,
-        target.wall,
-        target.row,
-        target.index,
-        offer.elevation,
-      );
+      const free =
+        target.free === undefined
+          ? null
+          : placeAt(
+              offer.elements,
+              layout,
+              id,
+              target.wall,
+              target.row,
+              target.free,
+              offer.elevation,
+            );
+      const result =
+        free && !("error" in free)
+          ? { elements: free.elements, layout: free.layout }
+          : relocateItem(
+              offer.elements,
+              layout,
+              id,
+              target.wall,
+              target.row,
+              target.index,
+              offer.elevation,
+            );
       if (result) {
         change({
           ...result,
@@ -446,17 +488,23 @@ export default function KitchenView({
     saveItem(copy);
   }
   function removeItem(e: LayoutItem) {
-    const rest = offer.elements.filter(
-        (x) => x.id !== e.id && x.autoTopFor !== e.id,
-      ),
-      spacers = layout.spacers!.filter((x) => x.id !== e.id),
+    // The place of a deleted element stays empty, so a new element (or another one) can take it.
+    const result = removeLayoutItem(
+      offer.elements.filter((x) => x.autoTopFor !== e.id),
+      layout,
+      e.id,
+      offer.elevation,
+    );
+    if (!result) return;
+    const rest = result.elements,
+      spacers = result.layout.spacers ?? [],
       islandLeft = [...rest, ...spacers].some(
         (x) => x.placement?.wall === "island",
       );
     change({
       elements: rest,
       layout: {
-        ...layout,
+        ...result.layout,
         spacers,
         ...(islandLeft
           ? {}
@@ -595,7 +643,10 @@ export default function KitchenView({
                 className={w.id === wall.id ? "active" : ""}
                 aria-pressed={w.id === wall.id}
                 onClick={() => {
-                  if (canOpen()) chooseWall(w.id);
+                  if (!canOpen()) return;
+                  chooseWall(w.id);
+                  // From the top view or the 3D view the wall opens in the front view.
+                  if (view !== "front") setView("front");
                 }}
               >
                 {w.name}
@@ -1295,7 +1346,13 @@ export default function KitchenView({
                 }}
               >
                 <span>{codes.get(moving.id)}</span>
-                <strong>{number(span(moving) / 10)} cm</strong>
+                <strong>
+                  {number(
+                    (drag.target ? drag.target.offset : (moving.placement?.offset ?? 0)) /
+                      10,
+                  )}{" "}
+                  cm
+                </strong>
               </div>
               <div
                 className={`drag-status ${drag.target && (!drag.target.compatible || drag.target.overrun) ? "invalid" : ""}`}

@@ -302,6 +302,30 @@ export default function ElementEditor({
                 {numeric("width", "Širina", value.kind.startsWith("reference") && t.width < 80 ? 10 : 80, 6000)}
                 {numeric("height", "Visina", 40, 3000)}
               </div>
+              {!island && value.placement && (
+                <Field
+                  label="Od levog kraja zida (mm)"
+                  hint="Element staje tačno tu, ostali ostaju. Pomeranje je na po 50 mm (5 cm)."
+                >
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={100000}
+                    step={50}
+                    value={value.placement.at ?? value.placement.offset ?? 0}
+                    onChange={(e) =>
+                      setValue({
+                        ...value,
+                        placement: {
+                          ...value.placement!,
+                          at: Number(e.target.value),
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              )}
               {island && (
                 <>
                   {numeric("depth", "Dubina ostrva", 100, 3000)}

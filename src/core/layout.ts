@@ -26,7 +26,10 @@ export const rowOf = (e: LayoutItem): LayoutRow =>
     : ["worktop", "side", "plinth", "panel", "filler"].includes(e.kind) ||
         isBridge(e)
       ? "extra"
-      : templates.find((t) => t.kind === e.kind)?.group === "Gornji"
+      : // A tall free-standing appliance (fridge) is a tall cabinet: it does not set the height of the base row.
+        isFreestanding(e.kind) && e.height >= 1500
+        ? "tall"
+        : templates.find((t) => t.kind === e.kind)?.group === "Gornji"
         ? "wall"
         : templates.find((t) => t.kind === e.kind)?.group === "Visoki"
           ? "tall"
@@ -96,11 +99,13 @@ export function junctionReservations(
           )
           .reduce((max, r) => Math.max(max, r.size), 0);
         const nextDepth = first && !isSpacer(first) ? first.depth : 0;
+        const used = before.reduce(
+          (sum, item) => sum + span(item) + (item.placement?.gap ?? 0),
+          0,
+        );
         if (
-          start + before.reduce((sum, item) => sum + span(item), 0) >
-            previous.length - nextDepth ||
-          start + before.reduce((sum, item) => sum + span(item), 0) >=
-            previous.length
+          start + used > previous.length - nextDepth ||
+          start + used >= previous.length
         )
           reserve(next.id, "start", last, previous.id);
       }
@@ -300,12 +305,14 @@ export function packLayout(
       const spans =
         row === "extra" ? [] : blockedSpans(items, wall.id, row, elevation);
       lane.forEach((e, order) => {
-        if (row !== "extra") offset = freeOffset(offset, span(e), spans);
+        const gap = row === "extra" ? 0 : (e.placement?.gap ?? 0);
+        if (row !== "extra") offset = freeOffset(offset + gap, span(e), spans);
         e.placement = {
           wall: wall.id,
           row,
           order,
           offset: row === "extra" ? 0 : offset,
+          ...(gap > 0 ? { gap } : {}),
         };
         if (row !== "extra") offset += span(e);
       });
@@ -337,18 +344,42 @@ function syncAutoWorktops(elements: KitchenElement[], layout: KitchenLayout) {
     const cabinets = elements.filter(
       (e) => underWorktop(e) && e.placement?.wall === wall.id,
     );
-    const [keep, ...rest] = tops;
-    for (const extra of rest) dropped.add(extra.id);
     if (!cabinets.length) {
-      dropped.add(keep.id);
+      for (const top of tops) dropped.add(top.id);
       continue;
     }
-    const start = Math.min(...cabinets.map((e) => e.placement!.offset)),
-      end = Math.max(...cabinets.map(endOf));
-    keep.autoTopFor = wall.id;
-    keep.quantity = 1;
-    keep.width = end - start;
-    keep.visual = { ...keep.visual, offset: start };
+    // Cabinets that touch share a worktop; an empty place between them splits it.
+    const runs: { start: number; end: number }[] = [];
+    for (const cabinet of [...cabinets].sort(
+      (a, b) => a.placement!.offset - b.placement!.offset,
+    )) {
+      const last = runs.at(-1);
+      if (last && cabinet.placement!.offset - last.end <= 1)
+        last.end = Math.max(last.end, endOf(cabinet));
+      else runs.push({ start: cabinet.placement!.offset, end: endOf(cabinet) });
+    }
+    const ordered = [...tops].sort(
+      (a, b) => (a.visual?.offset ?? 0) - (b.visual?.offset ?? 0),
+    );
+    runs.forEach((run, i) => {
+      let top = ordered[i];
+      if (!top) {
+        top = structuredClone(ordered[0]);
+        top.id = uid();
+        top.placement = {
+          wall: wall.id,
+          row: "extra",
+          order: 1000 + i,
+          offset: 0,
+        };
+        elements.push(top);
+      }
+      top.autoTopFor = wall.id;
+      top.quantity = 1;
+      top.width = run.end - run.start;
+      top.visual = { ...top.visual, offset: run.start };
+    });
+    for (const extra of ordered.slice(runs.length)) dropped.add(extra.id);
   }
   // A top whose wall no longer exists goes away with it.
   for (const e of elements)
@@ -463,10 +494,10 @@ export function wallUsage(
   );
   const base = items
       .filter((e) => laneOf(e) === "base")
-      .reduce((a, e) => a + span(e), 0),
+      .reduce((a, e) => a + span(e) + (e.placement?.gap ?? 0), 0),
     upper = items
       .filter((e) => laneOf(e) === "wall")
-      .reduce((a, e) => a + span(e), 0),
+      .reduce((a, e) => a + span(e) + (e.placement?.gap ?? 0), 0),
     reservations = junctionReservations(
       elements,
       layout || { walls: [wall], activeWall: wall.id },
@@ -509,14 +540,141 @@ export function relocateItem(
     cloneLayout = structuredClone(layout),
     items = allLayoutItems(cloneElements, cloneLayout),
     moving = items.find((e) => e.id === id)!;
+  const before = moving.placement,
+    oldLane = before
+      ? orderedLane(cloneElements, cloneLayout, before.wall, laneOf(moving))
+      : [],
+    oldIndex = oldLane.findIndex((e) => e.id === id);
   const target = orderedLane(cloneElements, cloneLayout, wall, row).filter(
     (e) => e.id !== id,
   );
-  target.splice(Math.max(0, Math.min(index, target.length)), 0, moving);
+  const at = Math.max(0, Math.min(index, target.length)),
+    // Saving an element where it already stands keeps its own gap; moving it starts without one.
+    stays =
+      !!before && before.wall === wall && laneOf(moving) === row && oldIndex === at;
+  target.splice(at, 0, moving);
   target.forEach((e, order) => {
-    e.placement = { wall, row, order, offset: 0 };
+    const gap = e.id === id && !stays ? 0 : (e.placement?.gap ?? 0);
+    e.placement = { wall, row, order, offset: 0, ...(gap > 0 ? { gap } : {}) };
   });
   return packLayout(cloneElements, cloneLayout, elevation);
+}
+/** Gives the space of a removed or moved-away item to the next item of its lane, so the others stay put. */
+function carryGap(items: LayoutItem[], leaving: LayoutItem) {
+  const where = leaving.placement;
+  if (!where) return;
+  const lane = items
+    .filter((e) => e.placement?.wall === where.wall && laneOf(e) === laneOf(leaving))
+    .sort((a, b) => position(a) - position(b));
+  const next = lane[lane.findIndex((e) => e.id === leaving.id) + 1];
+  if (next?.placement)
+    next.placement.gap =
+      (next.placement.gap ?? 0) + (where.gap ?? 0) + span(leaving);
+}
+/** Removes an element but leaves its place empty; removing a spacer closes the gap as before. */
+export function removeItem(
+  elements: KitchenElement[],
+  layout: KitchenLayout,
+  id: string,
+  elevation?: Partial<ElevationConfig>,
+) {
+  const packed = packLayout(elements, layout, elevation),
+    items = allLayoutItems(packed.elements, packed.layout),
+    target = items.find((e) => e.id === id);
+  if (!target) return null;
+  if (!isSpacer(target)) carryGap(items, target);
+  const rest = packed.elements.filter((e) => e.id !== id),
+    spacers = (packed.layout.spacers ?? []).filter((e) => e.id !== id);
+  return packLayout(rest, { ...packed.layout, spacers }, elevation);
+}
+export type PlaceResult =
+  | { elements: KitchenElement[]; layout: KitchenLayout; offset: number }
+  | { error: string };
+/**
+ * Puts an item at an exact distance from the start of the wall (the other items stay where they are).
+ * A small overlap is moved to the nearest free place; a real clash returns an error.
+ */
+export function placeAt(
+  elements: KitchenElement[],
+  layout: KitchenLayout,
+  id: string,
+  wall: string,
+  row: LayoutLane,
+  want: number,
+  elevation?: Partial<ElevationConfig>,
+): PlaceResult {
+  const packed = packLayout(elements, layout, elevation),
+    items = allLayoutItems(packed.elements, packed.layout),
+    moving = items.find((e) => e.id === id),
+    target = packed.layout.walls.find((w) => w.id === wall);
+  if (!moving || !target || row === "extra" || !canPlace(moving, row))
+    return { error: "Element se ne može postaviti na to mesto." };
+  const reservations = junctionReservations(packed.elements, packed.layout),
+    min = reservedLength(reservations, wall, row, "start"),
+    width = span(moving),
+    max =
+      target.length - reservedLength(reservations, wall, row, "end") - width;
+  if (max < min) return { error: "Element je širi od slobodnog prostora na zidu." };
+  // The lane it leaves keeps its place empty.
+  if (moving.placement && (moving.placement.wall !== wall || laneOf(moving) !== row))
+    carryGap(items, moving);
+  const lane = items.filter(
+    (e) => e.id !== id && e.placement?.wall === wall && laneOf(e) === row,
+  );
+  const reals = lane
+    .filter((e) => !isSpacer(e))
+    .sort((a, b) => (a.placement?.offset ?? 0) - (b.placement?.offset ?? 0));
+  const fits = (start: number) =>
+    start >= min - 0.5 &&
+    start <= max + 0.5 &&
+    reals.every(
+      (r) =>
+        start + width <= (r.placement?.offset ?? 0) + 0.5 ||
+        start >= (r.placement?.offset ?? 0) + span(r) - 0.5,
+    );
+  let start = Math.round(Math.max(min, Math.min(max, want)));
+  if (!fits(start)) {
+    const candidates = reals
+      .flatMap((r) => [
+        (r.placement?.offset ?? 0) + span(r),
+        (r.placement?.offset ?? 0) - width,
+      ])
+      .filter(fits)
+      .sort((a, b) => Math.abs(a - start) - Math.abs(b - start));
+    if (!candidates.length || Math.abs(candidates[0] - start) > 200)
+      return { error: "Na tom mestu već stoji drugi element." };
+    start = Math.round(candidates[0]);
+  }
+  const sorted = [
+    ...reals.map((r) => ({ item: r, at: r.placement!.offset })),
+    { item: moving, at: start },
+  ].sort((a, b) => a.at - b.at);
+  const spacerIds = new Set(lane.filter(isSpacer).map((e) => e.id));
+  let cursor = min;
+  sorted.forEach(({ item, at }, order) => {
+    const gap = Math.max(0, Math.round(at - cursor));
+    item.placement = {
+      wall,
+      row,
+      order,
+      offset: 0,
+      ...(gap > 0 ? { gap } : {}),
+    };
+    cursor = at + span(item);
+  });
+  const layoutOut = {
+    ...packed.layout,
+    spacers: (packed.layout.spacers ?? []).filter((s) => !spacerIds.has(s.id)),
+  };
+  const result = packLayout(packed.elements, layoutOut, elevation),
+    placed = allLayoutItems(result.elements, result.layout).find(
+      (e) => e.id === id,
+    );
+  if (!placed?.placement || Math.abs(placed.placement.offset - start) > 1)
+    return {
+      error: "Na tom mestu je prepreka (prozor, vrata ili visoki element).",
+    };
+  return { ...result, offset: placed.placement.offset };
 }
 export function moveLayoutItem(
   elements: KitchenElement[],
