@@ -625,7 +625,6 @@ const libraryKinds: Record<(typeof libraryGroups)[number], ElementKind[]> = {
     "sink",
     "oven",
     "dishwasherBuilt",
-    "corner",
     "baseOpen",
     "baseCargo",
   ],
@@ -639,7 +638,6 @@ const libraryKinds: Record<(typeof libraryGroups)[number], ElementKind[]> = {
     "wallGlass1",
     "wallGlass2",
     "open",
-    "wallCorner",
   ],
   Visoki: [
     "tallOne",

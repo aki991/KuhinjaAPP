@@ -13,6 +13,7 @@ import {
   Sparkles,
   Undo2,
   Redo2,
+  Search,
 } from "lucide-react";
 import {
   isFreestanding,
@@ -65,6 +66,7 @@ import { Cabinet, Field, Modal, ModalPortalContext, number } from "./UI";
 import ElementEditor from "./ElementEditor";
 import SpacerEditor from "./SpacerEditor";
 import PresetPicker from "./PresetPicker";
+import { matchesLibrary } from "../core/library-search";
 import useLayoutDrag from "./useLayoutDrag";
 export default function KitchenView({
   offer,
@@ -82,6 +84,7 @@ export default function KitchenView({
   const [library, setLibrary] = useState(false),
     [group, setGroup] = useState("Donji"),
     [inlineGroup, setInlineGroup] = useState("Donji"),
+    [libraryQuery, setLibraryQuery] = useState(""),
     [editor, setEditor] = useState<LayoutItem | null>(null),
     [selected, setSelected] = useState<string | null>(null),
     [wallModal, setWallModal] = useState(false),
@@ -738,12 +741,18 @@ export default function KitchenView({
             selected={selected}
             onPick={selectItem}
           />
-          <button
-            className="btn primary full add-kitchen-element"
-            onClick={() => setLibrary(true)}
-          >
-            <Plus size={22} /> Dodaj element
-          </button>
+          {!fullscreen.active && (
+            <div className="library-search" role="search">
+              <Search size={18} aria-hidden="true" />
+              <input
+                type="search"
+                value={libraryQuery}
+                onChange={(e) => setLibraryQuery(e.target.value)}
+                placeholder="Pretraži element ili belu tehniku"
+                aria-label="Pretraži kuhinjske elemente i belu tehniku"
+              />
+            </div>
+          )}
           {!fullscreen.active && (
             <section
               className="kitchen-inline-library"
@@ -751,6 +760,7 @@ export default function KitchenView({
             >
               <div
                 className="library-filter"
+                hidden={!!libraryQuery.trim()}
                 role="group"
                 aria-label="Tip elementa u biblioteci"
               >
@@ -771,9 +781,11 @@ export default function KitchenView({
                 <div className="library-grid">
                   {libraryTemplates
                     .filter((t) =>
-                      inlineGroup === "Ostali"
-                        ? ["Ostrvski", "Dodaci"].includes(t.group)
-                        : t.group === inlineGroup,
+                      libraryQuery.trim()
+                        ? matchesLibrary(t, libraryQuery)
+                        : inlineGroup === "Ostali"
+                          ? ["Ostrvski", "Dodaci"].includes(t.group)
+                          : t.group === inlineGroup,
                     )
                     .map((t) => (
                       <button
@@ -786,7 +798,15 @@ export default function KitchenView({
                         <strong>{t.name}</strong>
                       </button>
                     ))}
-                  {inlineGroup === "Ostali" && (
+                  {libraryQuery.trim() &&
+                    !libraryTemplates.some((t) =>
+                      matchesLibrary(t, libraryQuery),
+                    ) && (
+                      <p className="library-empty">
+                        Nema rezultata za „{libraryQuery.trim()}“.
+                      </p>
+                    )}
+                  {!libraryQuery.trim() && inlineGroup === "Ostali" && (
                     <button
                       type="button"
                       onClick={addSpacerDirect}

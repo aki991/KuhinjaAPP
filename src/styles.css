@@ -2222,3 +2222,11 @@ th {
 .elevation-view > .elevation-toolbar .text-btn { min-height: 36px; }
 .elevation-view > .elevation-toolbar > .elevation-toolbar-row2 button { min-height: 30px; }
 .elevation-toolbar-row2 .history-first { margin-left: auto; }
+
+/* Search field above the element library. */
+.library-search { position: relative; display: flex; align-items: center; margin: 12px 0 8px; }
+.library-search > svg { position: absolute; left: 12px; color: #8a6a4a; pointer-events: none; }
+.library-search > input { width: 100%; min-height: 46px; padding: 8px 12px 8px 38px; font-size: 16px; border: 1px solid #dfc8ac; border-radius: 10px; background: #fffaf1; color: #4a321c; }
+.library-search > input:focus { outline: 2px solid #c69a63; outline-offset: 1px; }
+.library-empty { grid-column: 1 / -1; margin: 8px 0; color: #7a5a3d; }
+.library-filter[hidden] { display: none; }
