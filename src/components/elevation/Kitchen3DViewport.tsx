@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef } from "react";
-import { Maximize, Scan, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { DoorClosed, DoorOpen, Maximize, Scan, X } from "lucide-react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { OBB } from "three/examples/jsm/math/OBB.js";
 import { kitchenPlan, type PlanWall } from "../../core/top-view";
 import { isBridge, isSpacer, rowOf } from "../../core/layout";
 import { hoodDrop, type ElevationEntry } from "../../core/elevation";
@@ -30,6 +31,98 @@ function applianceOf(e: ElevationEntry) {
   return "none";
 }
 
+/** A door, drawer or lift-up front that can be opened in the 3D view (white goods stay closed). */
+export interface Mover {
+  pivot: THREE.Group;
+  home: THREE.Vector3;
+  kind: "door" | "drawer" | "lift";
+  /** Which way a hinged door swings: -1 for a left hinge, 1 for a right hinge. */
+  sign: number;
+  /** Drawer travel in mm. */
+  travel: number;
+  /** Current and wanted opening, 0 (closed) to 1 (open). */
+  t: number;
+  target: number;
+}
+
+export function poseMover(m: Mover) {
+  if (m.kind === "drawer") m.pivot.position.z = m.home.z + m.travel * m.t * MM;
+  else if (m.kind === "lift") m.pivot.rotation.x = -1.9 * m.t;
+  else m.pivot.rotation.y = m.sign * 1.75 * m.t;
+}
+
+const obbOf = (mesh: THREE.Mesh) => {
+  mesh.geometry.boundingBox ??= (mesh.geometry.computeBoundingBox(), mesh.geometry.boundingBox);
+  const obb = new OBB().fromBox3(mesh.geometry.boundingBox!);
+  obb.applyMatrix4(mesh.matrixWorld);
+  // A hair smaller, so surfaces that only touch do not count as a hit.
+  obb.halfSize.set(
+    Math.max(0.0005, obb.halfSize.x - 0.002),
+    Math.max(0.0005, obb.halfSize.y - 0.002),
+    Math.max(0.0005, obb.halfSize.z - 0.002),
+  );
+  return obb;
+};
+
+/** Opens and closes the fronts step by step; an opening front stops where it meets another element. */
+export function createMoverStepper(built: { root: THREE.Object3D; movers: Mover[] }) {
+  built.root.updateMatrixWorld(true);
+  const inMover = (o: THREE.Object3D) => {
+    for (let n: THREE.Object3D | null = o; n; n = n.parent) if (n.userData.mover) return true;
+    return false;
+  };
+  const obstacles: { mesh: THREE.Mesh; item: unknown; moving: boolean; box: THREE.Box3 }[] = [];
+  built.root.traverse((o) => {
+    if (o instanceof THREE.Mesh && o.userData.item)
+      obstacles.push({
+        mesh: o,
+        item: o.userData.item,
+        moving: inMover(o),
+        box: new THREE.Box3().setFromObject(o),
+      });
+  });
+  const blocked = (m: Mover) => {
+    m.pivot.updateMatrixWorld(true);
+    const mine: THREE.Mesh[] = [];
+    m.pivot.traverse((o) => o instanceof THREE.Mesh && mine.push(o));
+    const item = mine[0]?.userData.item;
+    for (const a of mine) {
+      const box = new THREE.Box3().setFromObject(a);
+      let own: OBB | null = null;
+      for (const o of obstacles) {
+        if (o.item === item) continue;
+        if (!box.intersectsBox(o.moving ? new THREE.Box3().setFromObject(o.mesh) : o.box)) continue;
+        own ??= obbOf(a);
+        if (own.intersectsOBB(obbOf(o.mesh))) return true;
+      }
+    }
+    return false;
+  };
+  const step = (m: Mover) => {
+    const from = m.t;
+    let to = from + (m.target - from) * 0.18;
+    if (Math.abs(m.target - to) <= 0.002) to = m.target;
+    if (to === from) return;
+    m.t = to;
+    poseMover(m);
+    if (to > from && blocked(m)) {
+      let lo = from,
+        hi = to;
+      for (let i = 0; i < 6; i++) {
+        const mid = (lo + hi) / 2;
+        m.t = mid;
+        poseMover(m);
+        if (blocked(m)) hi = mid;
+        else lo = mid;
+      }
+      m.t = lo;
+      m.target = lo;
+      poseMover(m);
+    }
+  };
+  return () => built.movers.forEach(step);
+}
+
 function color(value: string | undefined, fallback: string) {
   return new THREE.Color(
     value && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback,
@@ -39,6 +132,7 @@ function color(value: string | undefined, fallback: string) {
 export function buildScene(offer: Offer) {
   const plan = kitchenPlan(offer, "all");
   const root = new THREE.Group();
+  const movers: Mover[] = [];
   const materials = new Map<string, THREE.MeshStandardMaterial>();
   const mat = (
     c: THREE.Color,
@@ -121,6 +215,8 @@ export function buildScene(offer: Offer) {
     h: number,
     zFront: number,
     front: THREE.Material,
+    depth: number,
+    inner: THREE.Material,
   ) => {
     const item = e.item as Exclude<LayoutItem, { kind: "spacer" }>;
     const upper = e.row === "wall" || isBridge(item);
@@ -140,37 +236,54 @@ export function buildScene(offer: Offer) {
       drawer: boolean,
       hingeRight: boolean,
     ) => {
-      box(
-        g,
-        px,
-        py,
-        zFront,
-        pw,
-        ph,
-        FRONT,
-        item.visual?.glass ? glass : front,
-        item,
-      );
+      const lift = !drawer && lifting,
+        ox = !drawer && !lift && hingeRight ? px + pw : px,
+        oy = lift ? py + ph : py;
+      const pivot = new THREE.Group();
+      pivot.position.set(ox * MM, oy * MM, (zFront + FRONT) * MM);
+      g.add(pivot);
+      const mover: Mover = {
+        pivot,
+        home: pivot.position.clone(),
+        kind: drawer ? "drawer" : lift ? "lift" : "door",
+        sign: hingeRight ? 1 : -1,
+        travel: Math.max(0, Math.min(400, depth - 60)),
+        t: 0,
+        target: 0,
+      };
+      pivot.userData.mover = mover;
+      movers.push(mover);
+      const b = (
+        x: number,
+        y: number,
+        z: number,
+        w: number,
+        h: number,
+        d: number,
+        material: THREE.Material,
+      ) => box(pivot, x - ox, y - oy, z - zFront - FRONT, w, h, d, material, item);
+      b(px, py, zFront, pw, ph, FRONT, item.visual?.glass ? glass : front);
+      if (drawer && depth > 150 && ph > 90) {
+        // The drawer box slides out together with its front.
+        const tw = pw - 60,
+          td = depth - 40,
+          th = Math.min(ph - 70, 160),
+          tx = px + 30;
+        b(tx, py + 25, zFront - td, tw, 10, td, inner);
+        b(tx, py + 35, zFront - td, 12, th, td, inner);
+        b(tx + tw - 12, py + 35, zFront - td, 12, th, td, inner);
+        b(tx, py + 35, zFront - td, tw, th, 12, inner);
+      }
       if (!handles) return;
       if (drawer)
-        box(
-          g,
-          px + pw / 2 - 64,
-          py + ph - 45,
-          zFront + FRONT,
-          128,
-          12,
-          14,
-          handleMat,
-          item,
-        );
+        b(px + pw / 2 - 64, py + ph - 45, zFront + FRONT, 128, 12, 14, handleMat);
       else if (lifting)
         // Lift-up fronts are opened from the bottom edge, so the handle is horizontal.
-        box(g, px + pw / 2 - 64, py + 8, zFront + FRONT, 128, 12, 14, handleMat, item);
+        b(px + pw / 2 - 64, py + 8, zFront + FRONT, 128, 12, 14, handleMat);
       else {
         const hx = hingeRight ? px + 40 : px + pw - 52;
         const hy = upper ? py + 40 : py + ph - 200;
-        box(g, hx, hy, zFront + FRONT, 12, 160, 14, handleMat, item);
+        b(hx, hy, zFront + FRONT, 12, 160, 14, handleMat);
       }
     };
     const appliance = applianceOf(e);
@@ -358,17 +471,54 @@ export function buildScene(offer: Offer) {
       // Carcass slightly behind the fronts; base cabinets stand on a recessed plinth.
       // A free-standing appliance is one steel body, not a cabinet in the decor colour.
       const standing = isFreestanding(item.kind);
-      box(
-        g2,
-        x,
-        y,
-        z,
-        w,
-        h,
-        d - FRONT,
-        standing ? mat(new THREE.Color(applianceStyle(e.applianceColor).body), { roughness: 0.4, metalness: 0.2 }) : mat(body),
-        item,
-      );
+      const kind = applianceOf(e),
+        solid =
+          standing ||
+          kind === "fridge" ||
+          kind === "dishwasher" ||
+          (kind === "oven" && item.kind !== "oven");
+      if (solid)
+        box(
+          g2,
+          x,
+          y,
+          z,
+          w,
+          h,
+          d - FRONT,
+          standing
+            ? mat(new THREE.Color(applianceStyle(e.applianceColor).body), { roughness: 0.4, metalness: 0.2 })
+            : mat(body),
+          item,
+        );
+      else {
+        // Hollow carcass, so opened doors and drawers show an inside.
+        const T = 18,
+          depth = d - FRONT,
+          m = mat(body);
+        box(g2, x, y, z, T, h, depth, m, item);
+        box(g2, x + w - T, y, z, T, h, depth, m, item);
+        box(g2, x + T, y, z, w - 2 * T, T, depth, m, item);
+        box(g2, x + T, y + h - T, z, w - 2 * T, T, depth, m, item);
+        box(g2, x + T, y + T, z, w - 2 * T, h - 2 * T, 8, m, item);
+        if ((item.doors || 0) > 0 && !(item.drawers || 0)) {
+          const shelves = h > 1500 ? 3 : h > 650 ? 1 : 0;
+          for (let i = 1; i <= shelves; i++)
+            box(g2, x + T, y + (h * i) / (shelves + 1) - T / 2, z + 8, w - 2 * T, T, depth - 40, m, item);
+        }
+        if (item.kind === "oven")
+          box(
+            g2,
+            x + T,
+            y + h - OVEN_HEIGHT,
+            z + 8,
+            w - 2 * T,
+            OVEN_HEIGHT,
+            depth - 8,
+            mat(new THREE.Color(applianceStyle(e.applianceColor).body), { roughness: 0.4, metalness: 0.3 }),
+            item,
+          );
+      }
       if (e.row === "base" && y > 0)
         box(
           g2,
@@ -382,7 +532,7 @@ export function buildScene(offer: Offer) {
           item,
         );
       if (item.kind === "open" || item.kind === "baseOpen") continue;
-      frontPanels(g2, e, x, y, w, h, z + d - FRONT, front);
+      frontPanels(g2, e, x, y, w, h, z + d - FRONT, front, d - FRONT, mat(body.clone().multiplyScalar(1.05)));
       if (hoodDrop(item) > 0)
         box(
           g2,
@@ -443,7 +593,7 @@ export function buildScene(offer: Offer) {
   floor.position.set(center.x, 0, center.z);
   floor.receiveShadow = true;
   root.add(floor);
-  return { root, bounds, materials };
+  return { root, bounds, materials, movers };
 }
 
 /** One still picture of the kitchen from the default viewpoint, for the PDF offer. */
@@ -513,7 +663,8 @@ export default function Kitchen3DViewport({
   onSelect?: (item: LayoutItem) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
-  const api = useRef<{ fit: () => void } | null>(null);
+  const api = useRef<{ fit: () => void; toggleAll: () => void } | null>(null);
+  const [opened, setOpened] = useState(false);
   const select = useRef(onSelect);
   select.current = onSelect;
   // Only what is drawn: layout, sizes, materials and wall settings.
@@ -577,7 +728,15 @@ export default function Kitchen3DViewport({
       controls.update();
     };
     fit();
-    api.current = { fit };
+    api.current = {
+      fit,
+      toggleAll: () => {
+        const open = !built.movers.some((m) => m.target > 0);
+        for (const m of built.movers) m.target = open ? 1 : 0;
+        setOpened(open);
+      },
+    };
+    setOpened(false);
     const resize = () => {
       const w = node.clientWidth,
         h = node.clientHeight;
@@ -588,15 +747,10 @@ export default function Kitchen3DViewport({
     const observer = new ResizeObserver(resize);
     observer.observe(node);
     resize();
-    // A short tap opens the element editor; a drag only rotates the view.
+    // A tap opens or closes a door or drawer, or the element editor on the carcass; a drag only rotates the view.
     let down: { x: number; y: number } | null = null;
     const ray = new THREE.Raycaster();
-    const pointerDown = (e: PointerEvent) =>
-      (down = { x: e.clientX, y: e.clientY });
-    const pointerUp = (e: PointerEvent) => {
-      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6)
-        return;
-      down = null;
+    const pick = (e: MouseEvent) => {
       const r = renderer.domElement.getBoundingClientRect();
       ray.setFromCamera(
         new THREE.Vector2(
@@ -605,17 +759,40 @@ export default function Kitchen3DViewport({
         ),
         camera,
       );
-      const hit = ray
+      return ray
         .intersectObjects(built.root.children, true)
         .find((h) => h.object.userData.item);
+    };
+    const pointerDown = (e: PointerEvent) =>
+      (down = { x: e.clientX, y: e.clientY });
+    const pointerUp = (e: PointerEvent) => {
+      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6)
+        return;
+      down = null;
+      const hit = pick(e);
+      if (!hit) return;
+      let node: THREE.Object3D | null = hit.object;
+      while (node && !node.userData.mover) node = node.parent;
+      const mover = node?.userData.mover as Mover | undefined;
+      if (mover) {
+        mover.target = mover.target ? 0 : 1;
+        setOpened(built.movers.some((m) => m.target > 0));
+      } else select.current?.(hit.object.userData.item);
+    };
+    // A double tap always opens the element editor.
+    const doubleClick = (e: MouseEvent) => {
+      const hit = pick(e);
       if (hit) select.current?.(hit.object.userData.item);
     };
     renderer.domElement.addEventListener("pointerdown", pointerDown);
     renderer.domElement.addEventListener("pointerup", pointerUp);
+    renderer.domElement.addEventListener("dblclick", doubleClick);
+    const stepMovers = createMoverStepper(built);
     let frame = 0;
     const loop = () => {
       frame = requestAnimationFrame(loop);
       controls.update();
+      stepMovers();
       renderer.render(scene, camera);
     };
     loop();
@@ -624,6 +801,7 @@ export default function Kitchen3DViewport({
       observer.disconnect();
       renderer.domElement.removeEventListener("pointerdown", pointerDown);
       renderer.domElement.removeEventListener("pointerup", pointerUp);
+      renderer.domElement.removeEventListener("dblclick", doubleClick);
       controls.dispose();
       built.root.traverse((o) => {
         if (o instanceof THREE.Mesh) o.geometry.dispose();
@@ -651,6 +829,10 @@ export default function Kitchen3DViewport({
         <button className="text-btn" onClick={() => api.current?.fit()}>
           <Scan size={18} /> Uklopi
         </button>
+        <button className="text-btn" onClick={() => api.current?.toggleAll()}>
+          {opened ? <DoorClosed size={18} /> : <DoorOpen size={18} />}{" "}
+          {opened ? "Zatvori sve" : "Otvori sve"}
+        </button>
         {!fullscreen && onFullscreen && (
           <button
             className="icon-btn"
@@ -668,8 +850,9 @@ export default function Kitchen3DViewport({
         aria-label="3D pregled kuhinje"
       />
       <p className="kitchen-3d-hint">
-        Prevlačenjem okrećite, dva prsta za zum i pomeranje. Dodir otvara
-        element.
+        Prevlačenjem okrećite, dva prsta za zum i pomeranje. Dodir na vrata ili
+        fioku otvara i zatvara je, dodir na korpus ili dupli dodir otvara
+        uređivanje elementa.
       </p>
     </div>
   );
