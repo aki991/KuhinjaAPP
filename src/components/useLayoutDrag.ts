@@ -132,6 +132,7 @@ export default function useLayoutDrag({
           wall,
           lane,
           index,
+          offer.elevation,
         ),
         wallLength =
           offer.layout!.walls.find((w) => w.id === wall)?.length || 0,

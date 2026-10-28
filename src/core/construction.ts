@@ -1,4 +1,4 @@
-import { templates } from "./catalog";
+import { isSimulationOnly, templates } from "./catalog";
 import type {
   ElementKind,
   Hardware,
@@ -17,6 +17,8 @@ import {
   componentErrors,
   kitQuantities,
 } from "./opening";
+/** Height of the built-in oven; the rest of an oven cabinet is the drawer below it. */
+export const OVEN_HEIGHT = 600;
 export const hingesForHeight = (h: number) =>
   h <= 900 ? 2 : h <= 1600 ? 3 : h <= 2000 ? 4 : 5;
 export function construct(
@@ -34,6 +36,7 @@ export function construct(
     hardware: Hardware[] = [],
     warnings: string[] = [],
     errors: string[] = [];
+  if (isSimulationOnly(e.kind)) return { panels, hardware, warnings, errors };
   const template = templates.find((t) => t.kind === e.kind);
   if (template?.constructionKind)
     return construct({ ...e, kind: template.constructionKind }, sel, s, products);
@@ -142,7 +145,7 @@ export function construct(
   const gola = sel.opening === "gola";
   // No opening system is blocked: every element may use the options of its row.
   const vg = gola ? verticalGola(e, sel, products) : null;
-  const golaCompatible = gola && !vg && e.kind !== "open" && e.kind !== "oven";
+  const golaCompatible = gola && !vg && e.kind !== "open";
   if (vg) {
     const r = vg.rule,
       length = h - r.top - r.bottom;
@@ -215,11 +218,15 @@ export function construct(
     sel.body,
     inside / 1000,
   );
-  if (drawer) {
-    if (!Number.isInteger(e.drawers) || e.drawers < 1 || e.drawers > 6)
+  // Under the 600 mm built-in oven sits one drawer, as usual for oven cabinets.
+  const ovenDrawer = e.kind === "oven";
+  if (drawer || ovenDrawer) {
+    if (drawer && (!Number.isInteger(e.drawers) || e.drawers < 1 || e.drawers > 6))
       errors.push("Fiokar mora imati 1–6 fioka.");
-    const n = e.drawers,
-      frontHeight = (h - (n + 1) * g - topInset) / n,
+    const n = ovenDrawer ? 1 : e.drawers,
+      frontHeight = ovenDrawer
+        ? h - OVEN_HEIGHT - g
+        : (h - (n + 1) * g - topInset) / n,
       boxWidth = inside - 2 * s.clearance,
       boxDepth = d - 50,
       boxHeight = Math.min(180, frontHeight - 45);

@@ -14,13 +14,25 @@ import {
   LockKeyhole,
   FileText,
 } from "lucide-react";
-import { categories, findProduct, templates, uid } from "../core/catalog";
+import {
+  categories,
+  findProduct,
+  isSimulationOnly,
+  templates,
+  uid,
+} from "../core/catalog";
 import { calculateOffer, repriceOffer, rsd } from "../core/engine";
 import { displayProject, ensureLayout, elementCodes } from "../core/layout";
 import { effectiveSelection, upperCabinet, tallCabinet } from "../core/opening";
 import { construct } from "../core/construction";
 import { pushSelection } from "../core/opening-kits";
-import { exportPDF } from "../core/files";
+import {
+  exportCutListCSV,
+  exportCutListPDF,
+  exportDrillingDXF,
+  exportPDF,
+  exportWtInput,
+} from "../core/files";
 import type {
   Category,
   Offer,
@@ -37,6 +49,7 @@ import PushSystemDialog from "./PushSystemDialog";
 import VerticalGolaSelect from "./VerticalGolaSelect";
 import ElementEditor from "./ElementEditor";
 import { Cabinet, Field, Modal, money, number } from "./UI";
+import ElementPreview, { useElementEntries } from "./elevation/ElementPreview";
 type CostGroup =
   "material" | "hardware" | "labor" | "assembly" | "transport" | "profit";
 export default function OfferView({
@@ -74,6 +87,7 @@ export default function OfferView({
     [reprice, setReprice] = useState(false),
     [detail, setDetail] = useState<string | null>(null),
     [costGroup, setCostGroup] = useState<CostGroup | null>(null);
+  const previewEntries = useElementEntries(offer);
   const c = useMemo(() => calculateOffer(offer), [offer]),
     preferred = suppliers.find((s) => s.isDefault)?.name;
   const [pushTarget, setPushTarget] = useState<
@@ -377,7 +391,59 @@ export default function OfferView({
           </details>
           <details className="disclosure">
             <summary>Elementi i krojna lista</summary>
-            {offer.elements.map((e) => (
+            <div className="cutlist-actions">
+              <button
+                className="btn secondary"
+                disabled={!c.count || !!c.errors.length}
+                onClick={() =>
+                  void exportCutListPDF(offer).catch((e) => notify(e.message))
+                }
+              >
+                <Download size={19} /> Krojna lista (PDF)
+              </button>
+              <button
+                className="btn secondary"
+                disabled={!c.count || !!c.errors.length}
+                onClick={() => {
+                  try {
+                    exportCutListCSV(offer);
+                  } catch (e) {
+                    notify((e as Error).message);
+                  }
+                }}
+              >
+                <Download size={19} /> Krojna lista (CSV)
+              </button>
+              <button
+                className="btn secondary"
+                disabled={!c.count || !!c.errors.length}
+                onClick={() => {
+                  try {
+                    exportDrillingDXF(offer);
+                  } catch (e) {
+                    notify((e as Error).message);
+                  }
+                }}
+              >
+                <Download size={19} /> CNC bušenje (DXF)
+              </button>
+              <button
+                className="btn secondary"
+                disabled={!c.count || !!c.errors.length}
+                onClick={() => {
+                  try {
+                    exportWtInput(offer);
+                  } catch (e) {
+                    notify((e as Error).message);
+                  }
+                }}
+              >
+                <Download size={19} /> Sečenje (WTINPUT)
+              </button>
+            </div>
+            {offer.elements
+              .filter((e) => !isSimulationOnly(e.kind))
+              .map((e) => (
               <button
                 key={e.id}
                 className="action-row"
@@ -490,9 +556,16 @@ export default function OfferView({
               {offer.client.location ? ` · ${offer.client.location}` : ""}
             </p>
           )}
-          {offer.elements.map((e) => (
+          {offer.elements
+            .filter((e) => !isSimulationOnly(e.kind))
+            .map((e) => (
             <div className="customer-element" key={e.id}>
-              <Cabinet kind={e.kind} size={39} />
+              <ElementPreview
+                element={e}
+                entry={previewEntries.get(e.id)}
+                size={64}
+                bare
+              />
               <span>
                 {e.quantity} × {templates.find((t) => t.kind === e.kind)?.name}
                 <small>
@@ -643,7 +716,9 @@ export default function OfferView({
               )}
             </>
           ) : costGroup === "labor" ? (
-            c.elements.map((r) => (
+            c.elements
+              .filter((r) => !isSimulationOnly(r.element.kind))
+              .map((r) => (
               <div className="usage-row" key={r.element.id}>
                 <span>
                   {templates.find((t) => t.kind === r.element.kind)?.name} ×{" "}

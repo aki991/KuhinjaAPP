@@ -384,7 +384,8 @@ describe("Trajna lokalna baza", () => {
       ],
     };
     o.variants[0].elevation = structuredClone(o.elevation);
-    const price = calculateOffer(o);
+    // Saving packs the layout around the window, so compare against the packed project.
+    const price = calculateOffer(ensureLayout(o));
     await saveOffer(o, d);
     const copy = await exportBackup(d);
     await restoreBackup(copy, d);

@@ -9,6 +9,7 @@ import {
   junctionReservations,
   reservedLength,
 } from "./layout";
+import { isFreestanding, templates } from "./catalog";
 import type {
   ElevationConfig,
   KitchenElement,
@@ -46,6 +47,8 @@ export interface ElevationEntry {
   opening: Opening;
   appliance: VisualAppliance;
   hob: boolean;
+  /** Glass-ceramic hob on top of an oven cabinet: shown from above and in 3D, not in the front view. */
+  cooktop: boolean;
   counterTop: number;
   visible: Rect[];
   conflict: boolean;
@@ -58,6 +61,9 @@ export interface ElevationEntry {
     handle: ProductAppearance;
   };
   handlePosition?: Selection["handlePosition"];
+  golaColor?: Selection["golaColor"];
+  /** Colour of a white good (fridge, oven, hood); only set for those entries. */
+  applianceColor?: Selection["applianceColor"];
   verticalProfile?: {
     top: number;
     bottom: number;
@@ -77,6 +83,8 @@ export interface ElevationScene {
   upperBottom: number;
   warnings: string[];
   config: ElevationConfig;
+  /** Tile ids chosen for the room, drawn behind the kitchen. */
+  wallTile?: string;
 }
 export const defaultElevation = (): ElevationConfig => ({
   version: 1,
@@ -165,7 +173,7 @@ export function subtractRect(source: Rect, cut: Rect): Rect[] {
     { x: x0, y: y1, width: x1 - x0, height: source.y + source.height - y1 },
   ].filter((r) => r.width > 0 && r.height > 0);
 }
-const typeAppliance = (e: KitchenElement): VisualAppliance =>
+export const typeAppliance = (e: KitchenElement): VisualAppliance =>
   e.visual?.appliance && e.visual.appliance !== "auto"
     ? e.visual.appliance
     : e.kind === "oven" || e.kind === "tallOven"
@@ -175,9 +183,31 @@ const typeAppliance = (e: KitchenElement): VisualAppliance =>
         : e.kind === "fridge"
           ? "fridge"
           : "none";
+/**
+ * Telescopic hood cabinets are 40 mm shorter and hung 40 mm higher; the hood body fills
+ * the gap below so the bottom edge lines up with the neighbouring wall cabinets.
+ */
+export const hoodDrop = (item: LayoutItem) =>
+  !isSpacer(item) && ["reference038", "reference039"].includes(item.kind)
+    ? 40
+    : 0;
+/** Free-standing appliances stand on the floor instead of on a plinth. */
+const standingBottom = (item: LayoutItem, toeKick: number) =>
+  !isSpacer(item) && isFreestanding(item.kind) ? 0 : toeKick;
+/** Fridge, oven, dishwasher, hood: white goods whose colour can be chosen. */
+export const isWhiteGood = (item: LayoutItem, appliance: VisualAppliance) =>
+  !isSpacer(item) &&
+  (["fridge", "oven", "dishwasher"].includes(appliance) ||
+    item.kind === "freeHood" ||
+    hoodDrop(item) > 0 ||
+    (isFreestanding(item.kind) && item.kind.startsWith("reference")));
 /** Uses the same packed X positions as the simple view. Y is visual only, measured from the floor. */
 export function elevationScene(offer: Offer, wallId: string): ElevationScene {
-  const { elements, layout } = packLayout(offer.elements, offer.layout!),
+  const { elements, layout } = packLayout(
+      offer.elements,
+      offer.layout!,
+      offer.elevation,
+    ),
     wall = layout.walls.find((w) => w.id === wallId) || layout.walls[0],
     config = { ...defaultElevation(), ...offer.elevation },
     items: LayoutItem[] = [...elements, ...(layout.spacers || [])].filter(
@@ -191,7 +221,9 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
   );
   const baseTop = lower.length
       ? Math.max(
-          ...lower.map((e) => (e.visual?.bottom ?? config.toeKick) + e.height),
+          ...lower.map(
+            (e) => (e.visual?.bottom ?? standingBottom(e, config.toeKick)) + e.height,
+          ),
         )
       : config.toeKick + 720,
     tops = items.filter(
@@ -243,6 +275,10 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
         ),
       },
       handlePosition: selection.handlePosition,
+      golaColor: selection.golaColor,
+      applianceColor: isSpacer(item) || !isWhiteGood(item, typeAppliance(item))
+        ? undefined
+        : (item.visual?.applianceColor ?? offer.selection.applianceColor ?? "white"),
       verticalProfile:
         !isSpacer(item) && selection.opening === "gola"
           ? (() => {
@@ -263,9 +299,18 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
         : wallFrontHeight(item, selection, offer.settings.gap),
       appliance: isSpacer(item) ? ("none" as const) : typeAppliance(item),
       hob: !isSpacer(item) && !!item.visual?.hob,
+      cooktop:
+        !isSpacer(item) &&
+        (item.visual?.hob ??
+          (["oven", "reference015", "freeStove"].includes(item.kind) &&
+            laneOf(item) === "base")),
       counterTop: rect.y + rect.height,
       visible: [
-        { ...rect, y: rect.y - extension, height: rect.height + extension },
+        {
+          ...rect,
+          y: rect.y - extension - hoodDrop(item),
+          height: rect.height + extension + hoodDrop(item),
+        },
       ],
       conflict: false,
     };
@@ -287,8 +332,8 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
         !isSpacer(item) && item.visual?.bottom !== undefined
           ? item.visual.bottom
           : row === "wall"
-            ? upperBottom
-            : config.toeKick;
+            ? upperBottom + hoodDrop(item)
+            : standingBottom(item, config.toeKick);
       entries.push(
         entry(item, i, {
           x: item.placement!.offset + i * item.width,
@@ -355,22 +400,28 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
   upperBottom = actualTop + config.upperGap;
   for (const e of entries.filter((e) => e.row === "wall"))
     if (isSpacer(e.item) || e.item.visual?.bottom === undefined) {
-      e.rect.y = upperBottom;
+      e.rect.y = upperBottom + hoodDrop(e.item);
       e.visible = [frontBounds(e)];
       e.counterTop = e.rect.y + e.rect.height;
     }
-  // Bridges stand on top of the wall-cabinet row.
+  // Bridges stand on top of the wall-cabinet row (a tall decorative hood does not count).
   const upperHeight = Math.max(
     720,
     ...entries
-      .filter((e) => e.row === "wall" && !isSpacer(e.item))
+      .filter(
+        (e) =>
+          e.row === "wall" && !isSpacer(e.item) && e.item.kind !== "freeHood",
+      )
       .map((e) => e.rect.height),
   );
   for (const e of entries.filter(
     (e) => e.row === "extra" && isBridge(e.item),
   ))
     if (!isSpacer(e.item) && e.item.visual?.bottom === undefined) {
-      e.rect.y = upperBottom + upperHeight;
+      // The top edge stays where the standard bridge ends; a taller bridge grows downwards.
+      const standard =
+        templates.find((t) => t.kind === e.item.kind)?.height ?? e.rect.height;
+      e.rect.y = upperBottom + upperHeight + standard - e.rect.height;
       e.visible = [frontBounds(e)];
       e.counterTop = e.rect.y + e.rect.height;
     }
@@ -469,12 +520,13 @@ export function elevationScene(offer: Offer, wallId: string): ElevationScene {
     upperBottom,
     warnings: [...new Set(warnings)],
     config,
+    wallTile: offer.selection.wallTile,
   };
 }
 export const frontBounds = (e: ElevationEntry): Rect => ({
   ...e.rect,
-  y: e.rect.y - e.frontOverhang,
-  height: e.rect.height + e.frontOverhang,
+  y: e.rect.y - e.frontOverhang - hoodDrop(e.item),
+  height: e.rect.height + e.frontOverhang + hoodDrop(e.item),
 });
 export function toScreen(
   rect: Rect,

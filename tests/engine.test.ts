@@ -80,16 +80,17 @@ describe("Konstrukcioni model", () => {
       ]).slideCount,
     ).toBe(9);
   });
-  it("sudopera nema leđa a rerna nema front ni šarke", () => {
+  it("sudopera nema leđa, a rerna ima samo fioku ispod: bez šarki i vrata", () => {
     const sink = calc([newElement("sink")]),
       oven = calc([newElement("oven")]);
     expect(sink.elements[0].panels.some((p) => p.name === "Leđa")).toBe(false);
     expect(oven.hingeCount).toBe(0);
+    expect(oven.slideCount).toBe(1);
     expect(
-      oven.elements[0].panels.some(
-        (p) => p.material === defaultSelection.front,
-      ),
-    ).toBe(false);
+      oven.elements[0].panels
+        .filter((p) => p.material === defaultSelection.front)
+        .map((p) => p.name),
+    ).toEqual(["Front fioke 1"]);
   });
   it("svaki podržani šablon prolazi sa standardnim dimenzijama", () => {
     for (const t of templates.filter((t) => !t.unsupported))
@@ -107,12 +108,12 @@ describe("Konstrukcioni model", () => {
   });
 });
 describe("Trenutna optimizacija", () => {
-  it("demo ima 6 klizača: premium u ekonomične tačno −30.600 trošak / −38.250 prodajna", () => {
+  it("demo ima 7 klizača (fioka ispod rerne): premium u ekonomične tačno −35.700 trošak / −44.625 prodajna", () => {
     const a = calc(),
       b = calc(demoElements(), { ...defaultSelection, slide: "slide-economy" });
-    expect(a.slideCount).toBe(6);
-    expect(a.hardware - b.hardware).toBe(30600);
-    expect(a.total - b.total).toBe(38250);
+    expect(a.slideCount).toBe(7);
+    expect(a.hardware - b.hardware).toBe(35700);
+    expect(a.total - b.total).toBe(44625);
     expect(a.material).toBe(b.material);
   });
   it("12 klizača menja nabavni trošak za tačno 61.200", () => {
@@ -123,7 +124,7 @@ describe("Trenutna optimizacija", () => {
     ).toBe(61200);
   });
   it("promena klizača ne menja ormare bez fioka", () => {
-    const e = [newElement("base1"), newElement("tall"), newElement("oven")];
+    const e = [newElement("base1"), newElement("tall")];
     expect(calc(e).total).toBe(
       calc(e, { ...defaultSelection, slide: "slide-economy" }).total,
     );

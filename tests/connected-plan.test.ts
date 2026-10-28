@@ -57,7 +57,7 @@ describe("Povezani zidovi i ugaono zauzeće", () => {
         normalized.elements,
         normalized.layout!,
       ),
-    ).toBe(1800); // Most stoji iznad visećih i ne troši dužinu visećeg reda.
+    ).toBe(1200); // Viseći počinje posle visokog; most ne troši dužinu visećeg reda.
   });
   it("sprečava fizičko preklapanje običnih elemenata u spoju i pre potpunog popunjavanja A", () => {
     const { o, add } = fixture();

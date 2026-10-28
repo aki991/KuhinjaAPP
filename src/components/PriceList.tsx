@@ -155,6 +155,19 @@ export default function PriceList({
     setEdit(null);
     notify("Artikal sačuvan.");
   }
+  /** A price typed in the list is saved straight away and reaches every draft project. */
+  async function savePrice(product: Product, text: string) {
+    const price = Number(text.replace(",", "."));
+    if (text.trim() === "" || !Number.isFinite(price) || price < 0) {
+      notify("Cena mora biti broj veći ili jednak nuli.");
+      await onRefresh();
+      return;
+    }
+    if (price === product.price) return;
+    await db.products.put({ ...product, price });
+    await onRefresh();
+    notify(`Cena sačuvana: ${product.name}.`);
+  }
   const update = (patch: Partial<Product>) =>
     setEdit(
       edit
@@ -241,36 +254,68 @@ export default function PriceList({
         </select>
       </div>
       <div className="price-list">
-        {filtered.map((p) => (
-          <button
-            className={`price-row ${!p.active ? "inactive" : ""}`}
-            key={p.id}
-            onClick={() => setEdit({ ...p })}
-          >
-            <IconBox
-              icon={p.category === "labor" ? RefreshCw : Package}
-              tone="gray"
-            />
-            <span className="price-name">
-              <strong>{p.name}</strong>
-              <small>
-                {p.supplier}
-                {!p.active ? " · Neaktivan" : ""}
-              </small>
-            </span>
-            <span className="price-value">
-              <strong>
-                {new Intl.NumberFormat("sr-Latn-RS").format(p.price)}{" "}
-                {p.currency}
-              </strong>
-              <small>
-                po {p.unit}
-                {p.processing ? ` + obrada ${p.processing}` : ""}
-              </small>
-            </span>
-            <Pencil size={16} className="muted" />
-          </button>
-        ))}
+        {Object.entries(categories).map(([key, label]) => {
+          const rows = filtered
+            .filter((p) => p.category === key)
+            .sort((a, b) => a.name.localeCompare(b.name, "sr-Latn"));
+          if (!rows.length) return null;
+          return (
+            <section key={key} className="price-group" aria-label={label}>
+              <h3 className="price-group-title">
+                {label} <small>{rows.length}</small>
+              </h3>
+              {rows.map((p) => (
+                <div
+                  className={`price-row ${!p.active ? "inactive" : ""}`}
+                  key={p.id}
+                >
+                  <button
+                    type="button"
+                    className="price-main"
+                    onClick={() => setEdit({ ...p })}
+                  >
+                    <span className="price-name">
+                      <strong>{p.name}</strong>
+                      <small>
+                        {p.supplier}
+                        {p.code ? ` · ${p.code}` : ""}
+                        {!p.active ? " · Neaktivan" : ""}
+                        {p.processing ? ` · obrada ${p.processing}` : ""}
+                      </small>
+                    </span>
+                  </button>
+                  <label className="price-edit">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      aria-label={`Cena: ${p.name}`}
+                      // Remounts with the saved value after the price list is reloaded.
+                      key={`${p.id}-${p.price}`}
+                      defaultValue={p.price}
+                      onBlur={(e) => void savePrice(p, e.currentTarget.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                      }}
+                    />
+                    <small>
+                      {p.currency} / {p.unit}
+                    </small>
+                  </label>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={`Izmeni artikal ${p.name}`}
+                    onClick={() => setEdit({ ...p })}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                </div>
+              ))}
+            </section>
+          );
+        })}
         {!filtered.length && (
           <div className="empty">Nema artikala za izabrani filter.</div>
         )}

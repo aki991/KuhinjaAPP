@@ -373,7 +373,7 @@ export default function TopViewport({
                           />
                         </>
                       )}
-                      {(e.hob || e.appliance === "hob") &&
+                      {(e.hob || e.cooktop || e.appliance === "hob") &&
                         !upper &&
                         [0.3, 0.7].flatMap((a) =>
                           [0.3, 0.65].map((b) => (

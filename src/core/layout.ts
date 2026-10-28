@@ -1,4 +1,5 @@
 import type {
+  ElevationConfig,
   KitchenElement,
   KitchenLayout,
   KitchenWall,
@@ -9,7 +10,7 @@ import type {
   Offer,
   Placement,
 } from "./types";
-import { templates, uid } from "./catalog";
+import { isFreestanding, templates, uid } from "./catalog";
 export const isSpacer = (e: LayoutItem): e is LayoutSpacer =>
   e.kind === "spacer";
 /** Bridge cabinets sit above the wall cabinets, so they never use up wall-row length. */
@@ -185,7 +186,7 @@ export function spaceChange(offer: Offer, shape: string) {
         "Stavke sa uklonjenih zidova premeštene su na zid A. Proverite raspored i položaj prepreka.",
       ]),
     ];
-  const packed = packLayout(next.elements, layout);
+  const packed = packLayout(next.elements, layout, next.elevation);
   return { offer: { ...next, ...packed }, affected };
 }
 export const allLayoutItems = (
@@ -230,12 +231,57 @@ export function newSpacer(
   };
 }
 
-/** Recomputes all offsets. This never changes cabinet size, quantity or wall. */
-export function packLayout(elements: KitchenElement[], layout: KitchenLayout) {
-  // An automatic worktop lives and dies with its cabinet.
-  const nextElements = structuredClone(elements).filter(
-      (e) => !e.autoTopFor || elements.some((x) => x.id === e.autoTopFor),
+/**
+ * Wall lengths a lane cannot use: tall cabinets block the upper row, and wall objects
+ * (windows, doors, columns, niches) block every row whose height band they cross.
+ */
+function blockedSpans(
+  items: LayoutItem[],
+  wall: string,
+  row: "base" | "wall",
+  elevation?: Partial<ElevationConfig>,
+) {
+  const toeKick = elevation?.toeKick ?? 100,
+    onWall = items.filter(
+      (e): e is KitchenElement => !isSpacer(e) && e.placement?.wall === wall,
     ),
+    lower = onWall.filter((e) => laneOf(e) === "base" && rowOf(e) !== "tall"),
+    baseTop = lower.length
+      ? Math.max(...lower.map((e) => (e.visual?.bottom ?? toeKick) + e.height))
+      : toeKick + 720,
+    worktop = Math.max(
+      0,
+      ...onWall.filter((e) => e.kind === "worktop").map((e) => e.height),
+    ),
+    upperBottom = baseTop + worktop + (elevation?.upperGap ?? 600),
+    upperTop =
+      upperBottom +
+      Math.max(720, ...onWall.filter((e) => laneOf(e) === "wall").map((e) => e.height)),
+    [bandBottom, bandTop] = row === "base" ? [0, baseTop] : [upperBottom, upperTop];
+  const spans = (elevation?.objects || [])
+    .filter(
+      (o) =>
+        o.wall === wall && o.bottom < bandTop && o.bottom + o.height > bandBottom,
+    )
+    .map((o) => ({ start: o.x, end: o.x + o.width }));
+  if (row === "wall")
+    for (const e of onWall.filter((e) => rowOf(e) === "tall"))
+      spans.push({ start: e.placement!.offset, end: endOf(e) });
+  return spans.sort((a, b) => a.start - b.start);
+}
+/** Moves a start offset past every blocked span the item would overlap. */
+function freeOffset(offset: number, size: number, spans: { start: number; end: number }[]) {
+  for (const s of spans)
+    if (offset < s.end && offset + size > s.start) offset = s.end;
+  return offset;
+}
+/** Recomputes all offsets. This never changes cabinet size, quantity or wall. */
+export function packLayout(
+  elements: KitchenElement[],
+  layout: KitchenLayout,
+  elevation?: Partial<ElevationConfig>,
+) {
+  const nextElements = structuredClone(elements),
     nextLayout = structuredClone(layout);
   nextLayout.version = 3;
   nextLayout.spacers ||= [];
@@ -250,7 +296,11 @@ export function packLayout(elements: KitchenElement[], layout: KitchenLayout) {
       const lane = items
         .filter((e) => e.placement?.wall === wall.id && laneOf(e) === row)
         .sort((a, b) => position(a) - position(b));
+      // Base is packed first, so tall cabinets already have their final offsets here.
+      const spans =
+        row === "extra" ? [] : blockedSpans(items, wall.id, row, elevation);
       lane.forEach((e, order) => {
+        if (row !== "extra") offset = freeOffset(offset, span(e), spans);
         e.placement = {
           wall: wall.id,
           row,
@@ -260,15 +310,51 @@ export function packLayout(elements: KitchenElement[], layout: KitchenLayout) {
         if (row !== "extra") offset += span(e);
       });
     }
-  for (const top of nextElements.filter((e) => e.autoTopFor)) {
-    const owner = nextElements.find((e) => e.id === top.autoTopFor);
-    if (!owner?.placement) continue;
-    top.width = owner.width * owner.quantity;
-    top.visual = { ...top.visual, offset: owner.placement.offset };
-    if (top.placement && top.placement.wall !== owner.placement.wall)
-      top.placement = { ...top.placement, wall: owner.placement.wall };
+  return {
+    elements: syncAutoWorktops(nextElements, nextLayout),
+    layout: nextLayout,
+  };
+}
+/** Base cabinets that stand under the worktop (appliances that stand alone do not). */
+const underWorktop = (e: LayoutItem): e is KitchenElement =>
+  !isSpacer(e) &&
+  !e.autoTopFor &&
+  laneOf(e) === "base" &&
+  rowOf(e) === "base" &&
+  !isFreestanding(e.kind) &&
+  templates.find((t) => t.kind === e.kind)?.group === "Donji";
+/**
+ * An automatic worktop is one piece per wall, as long as the sum of its base cabinets.
+ * Older projects had one top per cabinet; those are merged into the wall's single top.
+ */
+function syncAutoWorktops(elements: KitchenElement[], layout: KitchenLayout) {
+  const dropped = new Set<string>();
+  for (const wall of layout.walls) {
+    const tops = elements.filter(
+      (e) => e.autoTopFor && e.placement?.wall === wall.id,
+    );
+    if (!tops.length) continue;
+    const cabinets = elements.filter(
+      (e) => underWorktop(e) && e.placement?.wall === wall.id,
+    );
+    const [keep, ...rest] = tops;
+    for (const extra of rest) dropped.add(extra.id);
+    if (!cabinets.length) {
+      dropped.add(keep.id);
+      continue;
+    }
+    const start = Math.min(...cabinets.map((e) => e.placement!.offset)),
+      end = Math.max(...cabinets.map(endOf));
+    keep.autoTopFor = wall.id;
+    keep.quantity = 1;
+    keep.width = end - start;
+    keep.visual = { ...keep.visual, offset: start };
   }
-  return { elements: nextElements, layout: nextLayout };
+  // A top whose wall no longer exists goes away with it.
+  for (const e of elements)
+    if (e.autoTopFor && !layout.walls.some((w) => w.id === e.placement?.wall))
+      dropped.add(e.id);
+  return dropped.size ? elements.filter((e) => !dropped.has(e.id)) : elements;
 }
 export function ensureLayout<T extends Offer>(offer: T): T {
   const next = structuredClone(offer),
@@ -331,7 +417,7 @@ export function ensureLayout<T extends Offer>(offer: T): T {
         }
       }
   }
-  const packed = packLayout(next.elements, next.layout);
+  const packed = packLayout(next.elements, next.layout, next.elevation);
   next.elements = packed.elements;
   next.layout = packed.layout;
   if (!offer.layout)
@@ -414,6 +500,7 @@ export function relocateItem(
   wall: string,
   row: LayoutLane,
   index: number,
+  elevation?: Partial<ElevationConfig>,
 ) {
   const item = allLayoutItems(elements, layout).find((e) => e.id === id);
   if (!item || !layout.walls.some((w) => w.id === wall) || !canPlace(item, row))
@@ -429,13 +516,14 @@ export function relocateItem(
   target.forEach((e, order) => {
     e.placement = { wall, row, order, offset: 0 };
   });
-  return packLayout(cloneElements, cloneLayout);
+  return packLayout(cloneElements, cloneLayout, elevation);
 }
 export function moveLayoutItem(
   elements: KitchenElement[],
   layout: KitchenLayout,
   id: string,
   direction: -1 | 1,
+  elevation?: Partial<ElevationConfig>,
 ) {
   const selected = allLayoutItems(elements, layout).find((e) => e.id === id);
   if (!selected?.placement) return null;
@@ -455,6 +543,7 @@ export function moveLayoutItem(
     selected.placement.wall,
     laneOf(selected),
     target,
+    elevation,
   );
 }
 /** Kept for older callers; all real project operations use moveLayoutItem with spacers. */

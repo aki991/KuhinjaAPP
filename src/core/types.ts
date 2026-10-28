@@ -117,7 +117,15 @@ export interface Selection {
   wallHandle?: string;
   handlePosition?: "vertical" | "horizontal" | "center";
   worktopThickness?: number;
+  /** Colour of the GOLA profiles in the drawings (the price does not depend on it). */
+  golaColor?: GolaColor;
+  /** Colour of white goods (fridge, oven, hood) in the drawings; pure simulation. */
+  applianceColor?: GolaColor;
+  /** Room tiles shown behind and under the kitchen (ids from the tile catalogue). */
+  wallTile?: string;
+  floorTile?: string;
 }
+export type GolaColor = "black" | "white" | "gray";
 export type SelectionProductKey =
   | "body"
   | "front"
@@ -186,7 +194,8 @@ export type LibraryKind =
   | "filler"
   | "freeFridge"
   | "freeStove"
-  | "freeDishwasher";
+  | "freeDishwasher"
+  | "freeHood";
 export type LayoutRow = "base" | "wall" | "tall" | "extra";
 export type LayoutLane = "base" | "wall" | "extra";
 export interface Placement {
@@ -236,6 +245,7 @@ export interface KitchenElement {
   /** The element keeps its own opening system; its materials still follow the project. */
   ownOpening?: boolean;
   /** Worktop created together with a base cabinet: follows it and is deleted with it. */
+  /** Wall id: this worktop is generated, one piece over all base cabinets of that wall. */
   autoTopFor?: string;
 }
 export type VisualAppliance =
@@ -244,6 +254,8 @@ export interface ElementVisual {
   hinge?: "left" | "right";
   glass?: boolean;
   appliance?: VisualAppliance;
+  /** Overrides the project colour of this appliance. */
+  applianceColor?: GolaColor;
   hob?: boolean;
   offset?: number;
   bottom?: number;

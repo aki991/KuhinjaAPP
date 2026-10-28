@@ -27,6 +27,7 @@ export default function ElevationViewport({
   focusRequest = 0,
   onTopView,
   onObject,
+  onEditWall,
 }: {
   scene: ElevationScene;
   scale: number;
@@ -42,6 +43,7 @@ export default function ElevationViewport({
   focusRequest?: number;
   onTopView?: () => void;
   onObject?: (id: string) => void;
+  onEditWall?: (id: string) => void;
 }) {
   const frame = useRef<HTMLDivElement>(null),
     anchor = useRef<{ x: number; y: number; px?: number; py?: number } | null>(
@@ -378,6 +380,11 @@ export default function ElevationViewport({
               }}
               rulers={false}
               showDimensions={showDimensions}
+              onEditLength={
+                onEditWall && scene.wall !== "island"
+                  ? () => onEditWall(scene.wall)
+                  : undefined
+              }
             />
             {onObject && (
               <div className="elevation-object-hits">

@@ -21,7 +21,28 @@ import {
 } from "../core/appearance";
 import { Field, Modal, money } from "./UI";
 import OpeningChoices from "./OpeningChoices";
+import { applianceStyles, golaPalette } from "../core/appearance";
+import { floorTiles, tileById, wallTiles, type Tile } from "../core/tiles";
+import { tileImage } from "./elevation/tileTexture";
 import VerticalGolaSelect from "./VerticalGolaSelect";
+/** Small preview of a tile pattern; an empty square for "no tile". */
+function TileSwatch({ tile, large = false }: { tile?: Tile; large?: boolean }) {
+  const image = useMemo(() => (tile ? tileImage(tile) : null), [tile]);
+  return (
+    <span
+      className={`tile-swatch ${large ? "large" : ""}`}
+      style={{
+        backgroundColor: tile?.color ?? "transparent",
+        backgroundImage: image ? `url(${image.url})` : undefined,
+        // Show about three tiles across so the pattern is recognisable.
+        backgroundSize: image
+          ? `${Math.max(24, ((large ? 120 : 52) * 1.0))}px auto`
+          : undefined,
+      }}
+      aria-hidden="true"
+    />
+  );
+}
 const tabs = [
   ["body", "Dekor korpusa"],
   ["front", "Frontovi"],
@@ -41,7 +62,8 @@ export default function AppearanceView({
     [query, setQuery] = useState(""),
     [color, setColor] = useState("all"),
     [scope, setScope] = useState<"base" | "wall">("base"),
-    [thickness, setThickness] = useState<number | null>(null);
+    [thickness, setThickness] = useState<number | null>(null),
+    [tileModal, setTileModal] = useState<"wall" | "floor" | null>(null);
   const tab = openTab ?? "body";
   const calculation = useMemo(() => calculateOffer(offer), [offer]);
   const catalog = useMemo(
@@ -329,6 +351,94 @@ export default function AppearanceView({
           </button>
         ))}
       </div>
+      <div className="combo-card room-card">
+        <h2>Prostorija i bela tehnika</h2>
+        <p className="combo-hint">
+          Samo za vizuelni prikaz kuhinje: ne ulazi u cenu ni u ponudu.
+        </p>
+        <div
+          className="choice-buttons gola-colors"
+          role="group"
+          aria-label="Boja bele tehnike"
+        >
+          <span className="field-label">
+            Boja bele tehnike (frižider, rerna, aspirator)
+          </span>
+          {(["black", "white", "gray"] as const).map((c) => (
+            <button
+              key={c}
+              aria-pressed={(offer.selection.applianceColor ?? "white") === c}
+              onClick={() => update({ ...offer.selection, applianceColor: c })}
+            >
+              <span
+                className="gola-swatch"
+                style={{ background: applianceStyles[c].body }}
+                aria-hidden="true"
+              />
+              {golaPalette[c].label}
+            </button>
+          ))}
+        </div>
+        {(["wall", "floor"] as const).map((area) => {
+          const tile = tileById(
+            area === "wall" ? offer.selection.wallTile : offer.selection.floorTile,
+          );
+          return (
+            <button
+              key={area}
+              type="button"
+              className="combo-row"
+              aria-label={area === "wall" ? "Zidne pločice" : "Podne pločice"}
+              onClick={() => setTileModal(area)}
+            >
+              <TileSwatch tile={tile} />
+              <span className="combo-text">
+                <small>{area === "wall" ? "Zidne pločice" : "Podne pločice"}</small>
+                <strong>{tile?.name ?? "Bez pločica"}</strong>
+              </span>
+              <ChevronRight size={20} aria-hidden="true" />
+            </button>
+          );
+        })}
+      </div>
+      {tileModal && (
+        <Modal
+          title={tileModal === "wall" ? "Zidne pločice" : "Podne pločice"}
+          wide
+          onClose={() => setTileModal(null)}
+        >
+          <div className="tile-grid" role="listbox">
+            {[undefined, ...(tileModal === "wall" ? wallTiles : floorTiles)].map(
+              (tile) => {
+                const current =
+                  tileModal === "wall"
+                    ? offer.selection.wallTile
+                    : offer.selection.floorTile;
+                return (
+                  <button
+                    key={tile?.id ?? "none"}
+                    type="button"
+                    role="option"
+                    aria-selected={current === tile?.id}
+                    aria-pressed={current === tile?.id}
+                    className="tile-choice"
+                    onClick={() => {
+                      update({
+                        ...offer.selection,
+                        [tileModal === "wall" ? "wallTile" : "floorTile"]: tile?.id,
+                      });
+                      setTileModal(null);
+                    }}
+                  >
+                    <TileSwatch tile={tile} large />
+                    <span>{tile?.name ?? "Bez pločica"}</span>
+                  </button>
+                );
+              },
+            )}
+          </div>
+        </Modal>
+      )}
       {openTab && (
         <Modal
           title={
@@ -543,6 +653,31 @@ export default function AppearanceView({
                   offer.selection.wallOpening,
                   offer.selection.tallOpening,
                 ].includes("push") && productSelect("push", "Push mehanizam")}
+                {[offer.selection.opening, offer.selection.tallOpening].includes(
+                  "gola",
+                ) && (
+                  <div
+                    className="choice-buttons gola-colors"
+                    role="group"
+                    aria-label="Boja GOLA profila"
+                  >
+                    <span className="field-label">Boja GOLA profila</span>
+                    {(["black", "white", "gray"] as const).map((c) => (
+                      <button
+                        key={c}
+                        aria-pressed={(offer.selection.golaColor ?? "black") === c}
+                        onClick={() => update({ ...offer.selection, golaColor: c })}
+                      >
+                        <span
+                          className="gola-swatch"
+                          style={{ background: golaPalette[c].hex }}
+                          aria-hidden="true"
+                        />
+                        {golaPalette[c].label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <h3 className="appearance-subtitle">Ručice</h3>
                 <div
                   className="choice-buttons"

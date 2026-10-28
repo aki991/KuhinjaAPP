@@ -58,6 +58,22 @@ describe("Shematski raspored bez uticaja na konstrukciju", () => {
     const n = ensureLayout(o);
     expect(n.elements.map((e) => e.placement?.offset)).toEqual([0, 0, 600]);
   });
+  it("viseći elementi preskaču visoke elemente i prozore", () => {
+    const o = createOffer(),
+      fridge = newElement("fridge"),
+      wallA = newElement("wall1"),
+      wallB = newElement("wall1");
+    o.elements = [fridge, newElement("base1"), wallA, wallB];
+    o.elevation!.objects = [
+      { id: "w", wall: "A", kind: "window", x: fridge.width + 200, width: 500, height: 1200, bottom: 1000 },
+    ];
+    const n = ensureLayout(o),
+      at = (id: string) => n.elements.find((e) => e.id === id)!.placement!.offset;
+    expect(at(wallA.id)).toBe(fridge.width + 700);
+    expect(at(wallB.id)).toBe(fridge.width + 700 + wallA.width);
+    // The window sits above the base cabinets, so it does not push them.
+    expect(at(n.elements[1].id)).toBe(fridge.width);
+  });
   it("radna ploča, sokla i viseći red ne dupliraju zauzetu širinu", () => {
     const o = createOffer();
     o.elements = [

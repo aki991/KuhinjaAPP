@@ -79,7 +79,7 @@ export function planPoint(
 }
 /** A→B→C is a connected clockwise chain; islands have their own footprint. */
 export function kitchenPlan(offer: Offer, filter: TopFilter) {
-  const packed = packLayout(offer.elements, offer.layout!),
+  const packed = packLayout(offer.elements, offer.layout!, offer.elevation),
     normalized = { ...offer, ...packed },
     connected = connectedWalls(packed.layout),
     reservations = junctionReservations(packed.elements, packed.layout),

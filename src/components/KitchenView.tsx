@@ -12,6 +12,7 @@ import {
   Settings2,
 } from "lucide-react";
 import {
+  isFreestanding,
   libraryGroups,
   libraryTemplates,
   templates,
@@ -102,8 +103,8 @@ export default function KitchenView({
   }, [fullscreen.active]);
   const root = useRef<HTMLDivElement>(null),
     packed = useMemo(
-      () => packLayout(offer.elements, offer.layout!),
-      [offer.elements, offer.layout],
+      () => packLayout(offer.elements, offer.layout!, offer.elevation),
+      [offer.elements, offer.layout, offer.elevation],
     ),
     layout = packed.layout;
   const roomWalls = layout.walls.filter((w) => w.id !== "island"),
@@ -195,27 +196,30 @@ export default function KitchenView({
       item.placement!.wall,
       laneOf(item),
       item.placement!.order ?? Number.MAX_SAFE_INTEGER,
+      offer.elevation,
     );
-    // A new base cabinet gets its own worktop, laid exactly over it.
+    // The first base cabinet on a wall brings one worktop for the whole run; it grows with the cabinets.
     let withTop = result?.elements;
     if (
       result &&
       !isSpacer(item) &&
       !offer.elements.some((e) => e.id === item.id) &&
-      templates.find((t) => t.kind === item.kind)?.group === "Donji"
+      templates.find((t) => t.kind === item.kind)?.group === "Donji" &&
+      !isFreestanding(item.kind) &&
+      !result.elements.some(
+        (e) => e.kind === "worktop" && e.placement?.wall === item.placement!.wall,
+      )
     ) {
-      const placed = result.elements.find((e) => e.id === item.id)!,
-        top = newElement("worktop", offer.selection);
-      top.autoTopFor = item.id;
+      const top = newElement("worktop", offer.selection);
+      top.autoTopFor = item.placement!.wall;
       top.width = item.width * item.quantity;
-      top.visual = { ...top.visual, offset: placed.placement?.offset ?? 0 };
       top.placement = appendPlacement(
         result.elements,
         top,
         item.placement!.wall,
         result.layout,
       );
-      withTop = [...result.elements, top];
+      withTop = packLayout([...result.elements, top], result.layout, offer.elevation).elements;
     }
     if (result)
       change({
@@ -260,6 +264,7 @@ export default function KitchenView({
         target,
         laneOf(item),
         Number.MAX_SAFE_INTEGER,
+        offer.elevation,
       );
       const active = island ? wall.id : target;
       if (result)
@@ -300,6 +305,7 @@ export default function KitchenView({
         target.wall,
         target.row,
         target.index,
+        offer.elevation,
       );
       if (result) {
         change({
@@ -358,7 +364,13 @@ export default function KitchenView({
     const lane = scope.filter((e) => sameLane(item, e)),
       index = lane.findIndex((e) => e.id === item.id);
     const move = (direction: -1 | 1) => {
-      const result = moveLayoutItem(offer.elements, layout, item.id, direction);
+      const result = moveLayoutItem(
+        offer.elements,
+        layout,
+        item.id,
+        direction,
+        offer.elevation,
+      );
       if (result) {
         change(result);
         setEditor(null);
@@ -389,6 +401,7 @@ export default function KitchenView({
         <button
           type="button"
           className="editor-duplicate"
+          hidden={item.kind === "worktop"}
           onClick={() => {
             duplicate(item);
             setEditor(null);
@@ -593,6 +606,7 @@ export default function KitchenView({
               onChooseWall={chooseWall}
               onTopView={() => setView("top")}
               onObject={setObjectEditId}
+              onEditWall={editWallLength}
             />
           )}
           <ElementStrip
@@ -845,6 +859,7 @@ export default function KitchenView({
                   moveWall,
                   moveRow,
                   moveIndex - 1,
+                  offer.elevation,
                 );
                 if (result) {
                   change({

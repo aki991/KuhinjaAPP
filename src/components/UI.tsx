@@ -125,6 +125,26 @@ export function Cabinet({
     appliance = template?.visual?.appliance ||
       (["fridge", "freeFridge", "tallFreezer"].includes(kind) ? "fridge" :
         ["oven", "tallOven", "freeStove"].includes(kind) ? "oven" : "none");
+  if (kind === "freeHood")
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 64 64"
+        fill="none"
+        aria-hidden="true"
+        className="cabinet"
+      >
+        <path
+          d="M25 6h14v28l16 14H9l16-14z"
+          fill="currentColor"
+          fillOpacity=".035"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
   return (
     <svg
       width={size}

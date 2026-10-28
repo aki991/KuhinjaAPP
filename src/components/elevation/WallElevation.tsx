@@ -1,4 +1,7 @@
 import { isBridge, isSpacer } from "../../core/layout";
+import { isFreestanding } from "../../core/catalog";
+import { tileById } from "../../core/tiles";
+import { tileImage } from "./tileTexture";
 import { toScreen, type ElevationScene } from "../../core/elevation";
 import ElementSVG from "./ElementSVG";
 import { HeightDimension, WidthDimension, dimensionChains } from "./Dimensions";
@@ -14,6 +17,7 @@ export default function WallElevation({
   canvasSize,
   rulers = true,
   showDimensions = true,
+  onEditLength,
 }: {
   scene: ElevationScene;
   scale: number;
@@ -23,12 +27,15 @@ export default function WallElevation({
   canvasSize?: { width: number; height: number };
   rulers?: boolean;
   showDimensions?: boolean;
+  onEditLength?: () => void;
 }) {
   const width = canvasSize?.width ?? scene.extent * scale + 100,
     height = canvasSize?.height ?? scene.height * scale + 116,
     floor = margin.top + scene.height * scale;
   const screen = (rect: Parameters<typeof toScreen>[0]) =>
     toScreen(rect, scale, scene.height, margin);
+  const tile = tileById(scene.wallTile),
+    roomTile = tile ? tileImage(tile) : null;
   const chains = dimensionChains(scene, scale),
     hasBridge = scene.entries.some((e) => isBridge(e.item));
   const dimensionFloor = scene.entries.some((e) => e.row === "base")
@@ -53,6 +60,23 @@ export default function WallElevation({
       data-scale={scale}
     >
       <defs>
+        {roomTile && (
+          <pattern
+            id="room-wall-tile"
+            patternUnits="userSpaceOnUse"
+            x={margin.left}
+            y={floor - roomTile.cellHeight * scale}
+            width={roomTile.cellWidth * scale}
+            height={roomTile.cellHeight * scale}
+          >
+            <image
+              href={roomTile.url}
+              width={roomTile.cellWidth * scale}
+              height={roomTile.cellHeight * scale}
+              preserveAspectRatio="none"
+            />
+          </pattern>
+        )}
         {scene.entries
           .filter((e) => e.row === "wall")
           .map((e) => (
@@ -72,6 +96,18 @@ export default function WallElevation({
         })}
         className="technical-room"
       />
+      {roomTile && (
+        <rect
+          {...screen({
+            x: 0,
+            y: 0,
+            width: scene.length,
+            height: scene.roomHeight,
+          })}
+          fill="url(#room-wall-tile)"
+          data-room-tile={scene.wallTile}
+        />
+      )}
       {scene.objects.map((o, index) => (
         <g key={o.id}>
           <VisualAddition
@@ -105,6 +141,7 @@ export default function WallElevation({
           <g key={e.key}>
             {e.row === "base" &&
               !isSpacer(e.item) &&
+              !isFreestanding(e.item.kind) &&
               scene.config.toeKick > 0 && (
                 <g className="technical-legs" aria-hidden="true">
                   <rect
@@ -198,7 +235,33 @@ export default function WallElevation({
           </g>
         );
       })}
-      <g data-dimension-chain="total">
+      <g
+        data-dimension-chain="total"
+        className={onEditLength ? "elevation-length-edit" : undefined}
+        role={onEditLength ? "button" : undefined}
+        tabIndex={onEditLength ? 0 : undefined}
+        aria-label={onEditLength ? `Izmeni dužinu zida, ${scene.length} mm` : undefined}
+        onClick={onEditLength}
+        onKeyDown={
+          onEditLength
+            ? (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onEditLength();
+                }
+              }
+            : undefined
+        }
+      >
+        {onEditLength && (
+          <rect
+            x={margin.left + (scene.length * scale) / 2 - 60}
+            y={dimensionFloor + (showDimensions ? chains.totalY : 32) - 26}
+            width={120}
+            height={34}
+            fill="transparent"
+          />
+        )}
         <WidthDimension
           x={margin.left}
           y={dimensionFloor + (showDimensions ? chains.totalY : 32)}

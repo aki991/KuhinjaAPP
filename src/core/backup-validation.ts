@@ -110,6 +110,12 @@ const validSelection = (s: Selection) =>
   (s.tallOpening === undefined ||
     ["handles", "push", "gola"].includes(s.tallOpening)) &&
   (s.wallHinge === undefined || str(s.wallHinge)) &&
+  (s.golaColor === undefined ||
+    ["black", "white", "gray"].includes(s.golaColor)) &&
+  (s.applianceColor === undefined ||
+    ["black", "white", "gray"].includes(s.applianceColor)) &&
+  (s.wallTile === undefined || str(s.wallTile)) &&
+  (s.floorTile === undefined || str(s.floorTile)) &&
   (s.frontMode === undefined ||
     ["body", "separate", "ral"].includes(s.frontMode)) &&
   (s.ralColor === undefined || validColor(s.ralColor)) &&
@@ -220,6 +226,8 @@ function validVisual(v: ElementVisual | undefined) {
       (v.hinge === undefined || ["left", "right"].includes(v.hinge)) &&
       (v.glass === undefined || typeof v.glass === "boolean") &&
       (v.hob === undefined || typeof v.hob === "boolean") &&
+      (v.applianceColor === undefined ||
+        ["black", "white", "gray"].includes(v.applianceColor)) &&
       (v.appliance === undefined ||
         [
           "auto",

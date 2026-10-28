@@ -1,10 +1,11 @@
 import { isSpacer, rowOf } from "../../core/layout";
-import type { ElevationEntry, Rect } from "../../core/elevation";
+import { hoodDrop, type ElevationEntry, type Rect } from "../../core/elevation";
 import { ApplianceSVG } from "./ApplianceSVG";
 import { useId, type CSSProperties } from "react";
 import type { ElementKind } from "../../core/types";
-import { templates } from "../../core/catalog";
+import { isFreestanding, templates } from "../../core/catalog";
 import ReferenceArtwork from "./ReferenceArtwork";
+import { applianceStyle, golaHex } from "../../core/appearance";
 const specialLabel: Partial<Record<ElementKind, string>> = {
   baseCargo: "CARGO",
   tallCargo: "CARGO",
@@ -120,7 +121,9 @@ export default function ElementSVG({
   dragging,
   clipId,
   thumbnail = false,
+  bare = false,
 }: {
+  bare?: boolean;
   entry: ElevationEntry;
   rect: Rect;
   selected: boolean;
@@ -134,6 +137,9 @@ export default function ElementSVG({
     front && (front.image || front.texture !== "solid")
       ? `url(#finish-${patternId})`
       : front?.color;
+  const hoodStyle = applianceStyle(e.applianceColor),
+    golaFill = golaHex(e.golaColor),
+    golaEdge = e.golaColor === "white" ? "#8d9296" : "#0f1112";
   const { width: w, height: h } = r,
     spacer = isSpacer(e.item),
     handles = e.opening === "handles",
@@ -153,22 +159,67 @@ export default function ElementSVG({
     gap = Math.min(1.3, w * 0.02, h * 0.02),
     innerW = Math.max(1, w - 2 * gap),
     innerH = Math.max(1, h - 2 * gap);
+  // Offer drawings leave the appliance out: only an empty niche shows where it goes.
+  const niche =
+    bare &&
+    !spacer &&
+    ((["oven", "fridge", "dishwasher"] as string[]).includes(e.appliance) ||
+      /rerna|frižider|zamrziv|sudomašin|kolonac/i.test(reference?.name ?? ""));
+  const drop = bare || !item ? 0 : hoodDrop(item);
   let content;
   if (spacer)
     content = (
       <rect width={w} height={h} className="technical-spacer" fill="none" />
     );
+  else if (niche)
+    content = (
+      <>
+        <rect width={w} height={h} fill="#f1eadb" className="material-body" />
+        <rect
+          x={w * 0.1}
+          y={h * 0.06}
+          width={w * 0.8}
+          height={h * 0.88}
+          fill="#e4dccb"
+          stroke="#9a937f"
+          strokeWidth={0.8}
+        />
+      </>
+    );
   else if (item && reference && !reference.constructionKind)
     content = (
       <ReferenceArtwork
+        applianceColor={e.applianceColor}
         kind={item.kind}
         width={w}
-        height={h}
+        height={h + drop * (h / e.rect.height)}
+        hood={drop > 0}
+        freestanding={isFreestanding(item.kind)}
         handles={handles}
         mirror={item.doors === 1 && item.visual?.hinge === "right"}
       />
     );
-  else if (
+  else if (item!.kind === "freeHood") {
+    // Decorative hood: canopy at the bottom, flue going up towards the ceiling.
+    const canopy = Math.min(h * 0.32, 300 * (h / e.rect.height)),
+      flue = w * 0.4;
+    content = (
+      <g
+        data-appliance="hood"
+        fill={hoodStyle.body}
+        stroke={selected ? "#98622f" : hoodStyle.line}
+        strokeWidth={selected ? 1.8 : 1.2}
+      >
+        <rect x={(w - flue) / 2} y={0} width={flue} height={h - canopy} />
+        <path d={`M${(w - flue) / 2} ${h - canopy}L0 ${h}H${w}L${(w + flue) / 2} ${h - canopy}Z`} />
+        <path
+          d={`M${w * 0.1} ${h - canopy * 0.2}H${w * 0.9}`}
+          stroke={hoodStyle.detail}
+          strokeWidth="2"
+        />
+      </g>
+    );
+  } else if (
     item!.kind === "worktop" ||
     item!.kind === "plinth" ||
     item!.kind === "panel" ||
@@ -210,7 +261,13 @@ export default function ElementSVG({
     );
   else if (e.appliance === "fridge" || e.appliance === "dishwasher")
     content = (
-      <ApplianceSVG kind={e.appliance} width={w} height={h} handles={handles} />
+      <ApplianceSVG
+        kind={e.appliance}
+        width={w}
+        height={h}
+        handles={handles}
+        color={e.applianceColor}
+      />
     );
   else if (item!.drawers > 0) {
     const n = item!.drawers,
@@ -258,9 +315,10 @@ export default function ElementSVG({
                 x={gap}
                 y={gap + i * dh}
                 width={drawerWidth}
-                height={Math.max(1.5, h * 0.018)}
-                fill="#9b9f99"
-                stroke="none"
+                height={Math.max(3, h * 0.03)}
+                fill={golaFill}
+                stroke={golaEdge}
+                strokeWidth={0.5}
               />
             )}
           </g>
@@ -280,22 +338,67 @@ export default function ElementSVG({
   } else {
     const tall = rowOf(item!) === "tall",
       oven = e.appliance === "oven",
+      // A built-in oven cabinet: the 600 mm oven on top, a drawer under it.
+      ovenDrawer = oven && !tall && item!.kind === "oven",
       count = oven && !tall ? 0 : Math.max(0, item!.doors),
-      openingH = oven ? Math.min(h * 0.87, 600 * (h / item!.height)) : 0;
+      openingH = ovenDrawer
+        ? 600 * (h / item!.height)
+        : oven
+          ? Math.min(h * 0.87, 600 * (h / item!.height))
+          : 0;
     content = (
       <>
         <rect width={w} height={h} fill="#f1eadb" className="material-body" />
         {oven && (
           <g
-            transform={`translate(${gap * 2},${tall ? (h - openingH) / 2 : (h - openingH) / 2})`}
+            transform={`translate(${ovenDrawer ? gap : gap * 2},${ovenDrawer ? gap : (h - openingH) / 2})`}
           >
             <ApplianceSVG
+              color={e.applianceColor}
               kind="oven"
-              width={Math.max(2, w - gap * 4)}
+              width={Math.max(2, w - gap * (ovenDrawer ? 2 : 4))}
               height={openingH}
             />
           </g>
         )}
+        {ovenDrawer &&
+          (() => {
+            const y0 = gap + openingH + gap,
+              dh = Math.max(1, h - y0 - gap),
+              inset = Math.min(3, dh * 0.1);
+            return (
+              <g data-front="drawer">
+                <rect x={gap} y={y0} width={innerW} height={dh} fill="#f3e5c8" className="front-frame" />
+                <rect
+                  data-front-panel="drawer"
+                  x={gap + inset}
+                  y={y0 + inset}
+                  width={Math.max(1, innerW - 2 * inset)}
+                  height={Math.max(1, dh - 2 * inset)}
+                  fill="#f8edd7"
+                  className="front-inset"
+                />
+                {handles && (
+                  <path
+                    className="technical-handle"
+                    d={`M${w * 0.37} ${y0 + Math.min(7, dh * 0.3)}h${w * 0.26}`}
+                  />
+                )}
+                {e.opening === "gola" && (
+                  <rect
+                    data-gola="horizontal"
+                    x={gap}
+                    y={y0}
+                    width={innerW}
+                    height={Math.max(3, h * 0.03)}
+                    fill={golaFill}
+                    stroke={golaEdge}
+                    strokeWidth={0.5}
+                  />
+                )}
+              </g>
+            );
+          })()}
         {count > 0 &&
           Array.from({ length: count }, (_, i) => {
             const fh = tall
@@ -352,9 +455,10 @@ export default function ElementSVG({
             x={gap}
             y={gap}
             width={innerW}
-            height={Math.max(1.5, h * 0.035)}
-            fill="#9b9f99"
-            stroke="none"
+            height={Math.max(3, h * 0.035)}
+            fill={golaFill}
+            stroke={golaEdge}
+            strokeWidth={0.5}
           />
         )}
       </>
@@ -470,13 +574,19 @@ export default function ElementSVG({
                 y={p.top * scale}
                 width={width}
                 height={Math.max(0, h - (p.top + p.bottom) * scale)}
-                fill="#9b9f99"
-                stroke="none"
+                fill={golaFill}
+                stroke={golaEdge}
+                strokeWidth={0.5}
               />
             );
           })}
-        {!spacer && (
-          <rect width={w} height={h} className="cabinet-outline" fill="none" />
+        {!spacer && item?.kind !== "freeHood" && (
+          <rect
+            width={w}
+            height={h}
+            className={`cabinet-outline ${item && isFreestanding(item.kind) ? "appliance-outline" : ""}`}
+            fill="none"
+          />
         )}
       </g>
     </g>

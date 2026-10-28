@@ -131,10 +131,11 @@ describe("Zajednička geometrija 2D elevacije", () => {
     const s = elevationScene(o, "A"),
       upper = s.entries.find((e) => e.id === "e1")!,
       tall = s.entries.find((e) => e.id === "e0")!;
-    expect(upper.rect.x).toBe(0);
+    // The upper cabinet starts where the tall element ends instead of hiding behind it.
+    expect(upper.rect.x).toBe(600);
     expect(upper.visible.length).toBeGreaterThan(0);
     expect(upper.visible.every((r) => !intersects(r, tall.rect))).toBe(true);
-    expect(s.warnings.join()).toContain("se preklapaju");
+    expect(s.warnings.join()).not.toContain("se preklapaju");
     const original = { x: 0, y: 0, width: 100, height: 100 },
       hole = { x: 20, y: 20, width: 30, height: 40 },
       pieces = subtractRect(original, hole);
@@ -166,7 +167,9 @@ describe("Zajednička geometrija 2D elevacije", () => {
     ];
     const s = elevationScene(o, "A");
     expect(s.objects.map((o) => o.id)).toEqual(["window"]);
-    expect(s.warnings.join()).toContain("Prozor se preklapa");
+    // Elements are packed past the window, so nothing overlaps it any more.
+    expect(s.entries.find((e) => e.id === "e0")!.rect.x).toBe(800);
+    expect(s.warnings.join()).not.toContain("Prozor se preklapa");
     expect(calculateOffer(o).total).toBe(price);
   });
   it("razlikuje vrata, fioke i aparate; GOLA i push nemaju klasične ručke", () => {
@@ -184,7 +187,7 @@ describe("Zajednička geometrija 2D elevacije", () => {
     let svg = render();
     expect(svg).toContain('data-opening-side="right"');
     expect(svg).toContain('data-front="glass"');
-    expect(svg.match(/data-front="drawer"/g)).toHaveLength(3);
+    expect(svg.match(/data-front="drawer"/g)).toHaveLength(4); // drawer3 + drawer under the oven
     for (const device of ["oven", "fridge", "sink", "hob"])
       expect(svg).toContain(`data-appliance="${device}"`);
     o.selection.opening = "gola";

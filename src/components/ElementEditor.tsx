@@ -23,6 +23,8 @@ import {
   tallCabinet,
 } from "../core/opening";
 import { pushSelection } from "../core/opening-kits";
+import { golaPalette, productAppearance } from "../core/appearance";
+import { isWhiteGood, typeAppliance } from "../core/elevation";
 import PushSystemDialog from "./PushSystemDialog";
 import VerticalGolaSelect from "./VerticalGolaSelect";
 import { Field, Modal } from "./UI";
@@ -172,6 +174,77 @@ export default function ElementEditor({
       </select>
     </Field>
   );
+  // The worktop is a single board over the whole run: length, depth, thickness and material only.
+  const isTop = value.kind === "worktop",
+    autoTop = !!value.autoTopFor,
+    area = (value.width * value.depth) / 1e6;
+  const worktopNote = autoTop
+    ? "Jedna radna ploča preko svih donjih elemenata na zidu. Dužina je zbir njihovih širina i menja se sama kad dodate ili uklonite element. Kantuju se vidljive ivice."
+    : "Radna ploča je jedan komad: širina × dubina. Kantuju se vidljive ivice.";
+  const worktopColor = productAppearance(
+    products.find((p) => p.id === value.selection.worktop),
+  ).color;
+  const worktopDrawing = (() => {
+    // Top view of the board, in proportion, with the three dimensions written next to it.
+    const maxW = 240,
+      maxH = 80,
+      s = Math.min(maxW / Math.max(value.width, 1), maxH / Math.max(value.depth, 1)),
+      w = Math.max(4, value.width * s),
+      h = Math.max(4, value.depth * s),
+      x = (260 - w) / 2,
+      y = 28 + (maxH - h) / 2;
+    return (
+      <svg
+        viewBox="0 0 260 150"
+        className="library-thumbnail worktop-drawing"
+        role="img"
+        aria-label="Radna ploča, pogled odozgo"
+      >
+        <rect
+          x={x}
+          y={y}
+          width={w}
+          height={h}
+          fill={worktopColor}
+          stroke="#6d6a5f"
+          strokeWidth="1.2"
+        />
+        <text x="130" y={y - 8} textAnchor="middle" fontSize="11" fill="#2859a4">
+          {Math.round(value.width)} mm
+        </text>
+        <text x="130" y={y + h + 20} textAnchor="middle" fontSize="11" fill="#2859a4">
+          dubina {Math.round(value.depth)} mm
+        </text>
+        <text x="130" y="140" textAnchor="middle" fontSize="11" fill="#6b5a44">
+          debljina {Math.round(value.height)} mm · {area.toFixed(2)} m²
+        </text>
+      </svg>
+    );
+  })();
+  const worktopControls = (
+    <>
+      <Field
+        label="Dužina (mm)"
+        hint={autoTop ? "Zbir širina donjih elemenata, računa se automatski." : undefined}
+      >
+        <input
+          type="number"
+          inputMode="numeric"
+          min={80}
+          max={20000}
+          required
+          readOnly={autoTop}
+          value={value.width || ""}
+          onChange={(e) => setValue({ ...value, width: Number(e.target.value) })}
+        />
+      </Field>
+      <div className="field-grid">
+        {numeric("depth", "Dubina (mm)", 100, 1500)}
+        {numeric("height", "Debljina (mm)", 10, 100)}
+      </div>
+      {select("worktop", "worktop", "Materijal")}
+    </>
+  );
   return (
     <>
       <Modal title={t.name} onClose={onClose}>
@@ -211,10 +284,15 @@ export default function ElementEditor({
         >
           <div className="compact-element-editor">
             <div className="editor-drawing">
-              <LibraryThumbnail element={value} offer={{ ...offer, prices: products }} />
+              {isTop ? (
+                worktopDrawing
+              ) : (
+                <LibraryThumbnail element={value} offer={{ ...offer, prices: products }} />
+              )}
             </div>
             <div className="compact-element-controls">
               {actions}
+              {isTop ? worktopControls : (<>
               <div className="field-grid">
                 {numeric("width", "Širina", value.kind.startsWith("reference") && t.width < 80 ? 10 : 80, 6000)}
                 {numeric("height", "Visina", 40, 3000)}
@@ -263,6 +341,35 @@ export default function ElementEditor({
                     Automatski položaj
                   </button>
                 </>
+              )}
+              {isWhiteGood(value, typeAppliance(value)) && (
+                <Field label="Boja uređaja">
+                  <select
+                    value={value.visual?.applianceColor ?? ""}
+                    onChange={(e) =>
+                      setValue({
+                        ...value,
+                        visual: {
+                          ...value.visual,
+                          applianceColor: (e.target.value || undefined) as
+                            | "black"
+                            | "white"
+                            | "gray"
+                            | undefined,
+                        },
+                      })
+                    }
+                  >
+                    <option value="">
+                      Kao u izboru ({golaPalette[global.applianceColor ?? "white"].label.toLowerCase()})
+                    </option>
+                    {(["black", "white", "gray"] as const).map((c) => (
+                      <option key={c} value={c}>
+                        {golaPalette[c].label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
               )}
               <Field label="Smer otvaranja vrata">
                 <select disabled={!canChangeHinge} value={canChangeHinge ? value.visual?.hinge || (value.drawers > 0 ? "right" : "left") : "none"}
@@ -366,9 +473,14 @@ export default function ElementEditor({
             )}
             {value.selection.opening === "push" &&
               select("push", "push", "Push mehanizam")}
+            </>)}
             </div>
           </div>
-          {description && <p className="element-description">{description}</p>}
+          {(isTop ? worktopNote : description) && (
+            <p className="element-description">
+              {isTop ? worktopNote : description}
+            </p>
+          )}
           <fieldset hidden disabled className="element-advanced-hidden">
           <div className="dimension-fields">
             {numeric("depth", "Dubina", 10, 1500)}

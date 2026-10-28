@@ -1,18 +1,24 @@
+import { applianceStyle } from "../../core/appearance";
+import type { GolaColor } from "../../core/types";
 export function ApplianceSVG({
   kind,
   width: w,
   height: h,
   handles = true,
+  color,
 }: {
   kind: "oven" | "fridge" | "dishwasher";
   width: number;
   height: number;
   handles?: boolean;
+  color?: GolaColor;
 }) {
+  const st = applianceStyle(color),
+    ink = { stroke: st.line, color: st.detail };
   if (kind === "oven")
     return (
-      <g data-appliance="oven" className="appliance-lines">
-        <rect width={w} height={h} rx={1.5} fill="#eee9da" />
+      <g data-appliance="oven" className="appliance-lines" style={ink}>
+        <rect width={w} height={h} rx={1.5} fill={st.body} />
         <rect
           x={w * 0.09}
           y={h * 0.24}
@@ -28,7 +34,7 @@ export function ApplianceSVG({
             cx={w * x}
             cy={h * 0.105}
             r={Math.max(1, w * 0.035)}
-            fill="#f5f1e6"
+            fill={st.detail}
           />
         ))}
         <rect
@@ -37,7 +43,7 @@ export function ApplianceSVG({
           width={w * 0.22}
           height={h * 0.065}
           rx={1}
-          fill="#3b3f35"
+          fill={color === "black" ? "#4a4f52" : "#3b3f35"}
           stroke="none"
         />
         <path
@@ -48,8 +54,8 @@ export function ApplianceSVG({
     );
   if (kind === "fridge")
     return (
-      <g data-appliance="fridge" className="appliance-lines">
-        <rect width={w} height={h} fill="#f3e5c8" />
+      <g data-appliance="fridge" className="appliance-lines" style={ink}>
+        <rect width={w} height={h} fill={st.body} />
         {[
           { y: 0, height: h * 0.6, label: "FRIŽIDER" },
           { y: h * 0.6, height: h * 0.4, label: "ZAMRZIVAČ" },
@@ -61,8 +67,7 @@ export function ApplianceSVG({
               y={part.y + 3}
               width={Math.max(1, w - 6)}
               height={Math.max(1, part.height - 6)}
-              fill="#f8edd7"
-              className="front-inset"
+              style={{ fill: st.panel }}
             />
             <path
               d={`M${w - 4} ${part.y + 4}L4 ${part.y + part.height / 2}L${w - 4} ${part.y + part.height - 4}`}
@@ -72,6 +77,7 @@ export function ApplianceSVG({
             {w >= 95 && h >= 140 && (
               <text
                 className="appliance-label"
+                style={{ fill: st.detail }}
                 x={w / 2}
                 y={part.y + part.height * 0.53}
                 textAnchor="middle"
@@ -92,14 +98,14 @@ export function ApplianceSVG({
       </g>
     );
   return (
-    <g data-appliance="dishwasher" className="appliance-lines">
-      <rect width={w} height={h} fill="#eae9e1" />
+    <g data-appliance="dishwasher" className="appliance-lines" style={ink}>
+      <rect width={w} height={h} fill={st.body} />
       <rect
         x={1}
         y={1}
         width={Math.max(1, w - 2)}
         height={h * 0.12}
-        fill="#e0ded3"
+        fill={st.panel}
       />
       {[0.16, 0.24, 0.32].map((x) => (
         <circle
@@ -107,7 +113,7 @@ export function ApplianceSVG({
           cx={w * x}
           cy={h * 0.065}
           r={Math.max(0.7, w * 0.014)}
-          fill="#839094"
+          fill={st.detail}
           stroke="none"
         />
       ))}
@@ -144,11 +150,13 @@ export function HobSVG({
         width={w}
         height={h}
         rx={1.5}
-        fill="#d8dfe0"
+        fill="#1f2427"
+        stroke="#0f1315"
       />
       {[0.2, 0.4, 0.6, 0.8].map((at, i) => (
         <ellipse
           key={at}
+          stroke="#8d989d"
           cx={x + (width - w) / 2 + w * at}
           cy={y - h * 0.25}
           rx={w * (i % 2 ? 0.07 : 0.085)}

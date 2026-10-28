@@ -39,3 +39,34 @@ export const productThickness = (p: Product) =>
     const n = Number(match?.[1]);
     return n > 0 && n <= 100 ? n : undefined;
   })();
+/** Selectable GOLA profile colours: label for the picker and fill used in 2D/3D. */
+export const golaPalette: Record<
+  NonNullable<Selection["golaColor"]>,
+  { label: string; hex: string }
+> = {
+  black: { label: "Crna", hex: "#1f2223" },
+  white: { label: "Bela", hex: "#f4f4f1" },
+  gray: { label: "Siva", hex: "#8e9396" },
+};
+export const golaHex = (c: Selection["golaColor"]) =>
+  golaPalette[c ?? "black"].hex;
+/** How a white good is painted for each colour choice. */
+export interface ApplianceStyle {
+  body: string;
+  /** Slightly different panel inside the body (door, drawer). */
+  panel: string;
+  /** Outlines and split lines. */
+  line: string;
+  /** Handles, knobs and labels; readable against the body. */
+  detail: string;
+}
+export const applianceStyles: Record<
+  NonNullable<Selection["applianceColor"]>,
+  ApplianceStyle
+> = {
+  white: { body: "#f1f2ef", panel: "#f8f9f7", line: "#8d9699", detail: "#6d777b" },
+  black: { body: "#2a2d2f", panel: "#33373a", line: "#9aa3a7", detail: "#c4ccd0" },
+  gray: { body: "#a3a9ac", panel: "#adb3b6", line: "#5f686c", detail: "#3d4447" },
+};
+export const applianceStyle = (c: Selection["applianceColor"]) =>
+  applianceStyles[c ?? "white"];

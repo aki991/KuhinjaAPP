@@ -252,6 +252,16 @@
   margin: 12px 0;
 }
 
+/* The SVG ignores pointers; only the total wall dimension opens the length editor. */
+.elevation-length-edit {
+  pointer-events: all;
+  cursor: pointer;
+  outline: none;
+}
+.elevation-length-edit:focus-visible rect {
+  stroke: #98622f;
+  stroke-width: 2;
+}
 .elevation-object-hits {
   position: absolute;
   inset: 0;

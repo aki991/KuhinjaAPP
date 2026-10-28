@@ -229,7 +229,7 @@ const legacyTemplates: Template[] = [
     doors: 0,
     drawers: 0,
     shelves: 0,
-    rule: "Dve stranice, dno, jedna noseća polica, dve letve. Bez leđa, frontova i šarki. Proveriti ventilaciju i ugradni otvor rerne.",
+    rule: "Dve stranice, dno, noseća polica rerne, dve letve. Rerna je široka 60 cm i visoka 60 cm, ispod nje je jedna fioka sa frontom, klizačima i ručkom. Bez leđa i šarki. Proveriti ventilaciju i ugradni otvor rerne.",
   },
   {
     kind: "corner",
@@ -535,6 +535,12 @@ const newTemplates: Template[] = [
     visual: { appliance: "dishwasher" },
     unsupported: true,
   }),
+  // Hangs in the upper row like a wall cabinet: canopy at cabinet height, chimney towards the ceiling.
+  derived("freeHood", "Samostojeća dekorativna napa", "Gornji", "panel", {
+    width: 900,
+    height: 1000,
+    depth: 450,
+  }),
 ];
 const verifiedReferences: Record<string, ElementKind> = {
   reference001: "base1",
@@ -582,6 +588,17 @@ export const templates: Template[] = [
   ...newTemplates,
   ...referenceTemplates,
 ];
+/**
+ * Free-standing appliances (fridge, stove, dishwasher) are not built by the workshop:
+ * no carcass material, hardware or labour, and their own body/handle in the drawing.
+ */
+export const isFreestanding = (kind: string) =>
+  kind !== "freeHood" &&
+  (kind.startsWith("free") ||
+    /samostojeć/i.test(templates.find((t) => t.kind === kind)?.name ?? ""));
+/** Appliances and the decorative hood only help to simulate the kitchen: no cost, not in the offer. */
+export const isSimulationOnly = (kind: string) =>
+  kind === "freeHood" || isFreestanding(kind);
 export const libraryGroups = [
   "Donji",
   "Viseći",
@@ -645,6 +662,7 @@ const libraryKinds: Record<(typeof libraryGroups)[number], ElementKind[]> = {
     "freeFridge",
     "freeStove",
     "freeDishwasher",
+    "freeHood",
   ],
 };
 const names: Partial<Record<ElementKind, string>> = {

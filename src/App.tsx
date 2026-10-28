@@ -20,7 +20,13 @@ import {
   CircleHelp,
   Palette,
 } from "lucide-react";
-import { defaultSelection, defaults, findProduct } from "./core/catalog";
+import { followsPriceList, syncPrices } from "./core/prices";
+import {
+  defaultSelection,
+  defaults,
+  findProduct,
+  isSimulationOnly,
+} from "./core/catalog";
 import {
   createOffer,
   db,
@@ -85,8 +91,19 @@ export default function App() {
       db.suppliers.toArray(),
       db.settings.get("main"),
     ]);
-    setOffers(o.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+    // Drafts follow the price list; sent and accepted offers keep their quoted prices.
+    const synced = o.map((x) => (followsPriceList(x) ? syncPrices(x, p) : x));
+    await Promise.all(
+      synced.map((x, i) => (x !== o[i] ? db.offers.put(x) : undefined)),
+    );
+    setOffers(synced.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
     setProducts(p);
+    setOffer((current) => {
+      if (!current || !followsPriceList(current)) return current;
+      const next = syncPrices(current, p);
+      if (next !== current) void db.meta.put({ id: "draft", value: next });
+      return next;
+    });
     setSuppliers(s);
     if (st) setSettings(st.value);
   }
@@ -222,7 +239,10 @@ export default function App() {
         <span>
           <strong>{displayProject(o.client.project)}</strong>
           <small>
-            {o.elements.reduce((a, e) => a + e.quantity, 0)} elemenata
+            {o.elements
+              .filter((e) => !isSimulationOnly(e.kind))
+              .reduce((a, e) => a + e.quantity, 0)}{" "}
+            elemenata
             {o.client.location ? " · " + o.client.location : ""}
           </small>
         </span>

@@ -1,5 +1,5 @@
 import { construct } from "./construction";
-import { templates } from "./catalog";
+import { isSimulationOnly, templates } from "./catalog";
 import { effectiveSelection } from "./opening";
 import { elevationScene, intersects } from "./elevation";
 import type {
@@ -165,8 +165,9 @@ export function calculateWithContext(
       if (p?.category === "labor") kitLabor += amount;
       else hardwareCost += amount;
     }
-    const labor =
-      kitLabor +
+    const labor = isSimulationOnly(e.kind)
+      ? 0
+      : kitLabor +
       (built.panels.reduce((sum, p) => sum + p.quantity, 0) *
         work("labor-cut", s.cutPrice) +
         work("labor-build", s.laborPerElement) +
@@ -287,7 +288,9 @@ export function calculateWithContext(
     cost: round(cost),
     profit: round(total - cost),
     total: round(total),
-    count: elements.reduce((a, e) => a + e.quantity, 0),
+    count: elements
+      .filter((e) => !isSimulationOnly(e.kind))
+      .reduce((a, e) => a + e.quantity, 0),
     area: results.reduce((a, r) => a + r.area, 0),
     edge: results.reduce((a, r) => a + r.edge, 0),
     warnings: [...new Set(warnings)],

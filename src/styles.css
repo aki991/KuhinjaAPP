@@ -2125,3 +2125,64 @@ th {
     scroll-behavior: auto !important;
   }
 }
+
+.customer-element .element-preview {
+  flex: none;
+}
+
+.cutlist-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+
+/* Price list grouped by category with the price editable in place. */
+.price-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.price-group-title {
+  margin: 10px 2px 2px;
+  font-size: 15px;
+  letter-spacing: 0.2px;
+  color: #6b5a44;
+}
+.price-group-title small {
+  margin-left: 6px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+.price-row {
+  padding: 10px 12px;
+}
+.price-main {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.price-edit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 110px;
+}
+.price-edit input {
+  width: 110px;
+  padding: 6px 8px;
+  text-align: right;
+  font-weight: 600;
+}
+.price-edit small {
+  font-size: 12px;
+  opacity: 0.7;
+}
